@@ -29,7 +29,11 @@ function printRun(label: string, color: string, run: AgentRun) {
   console.log(`\n${color}${BOLD}${label}${RESET}`);
   console.log(`${DIM}${'─'.repeat(60)}${RESET}`);
 
-  if (run.toolCalls.length === 0) {
+  if (run.snapshotInjected) {
+    // Harness injection: context was pre-loaded — no tool calls needed
+    console.log(`  ${GREEN}${BOLD}✦ Work context auto-injected into system prompt${RESET}`);
+    console.log(`  ${DIM}(0 tool calls — harness injected the snapshot before first token)${RESET}`);
+  } else if (run.toolCalls.length === 0) {
     console.log(`  ${DIM}(no tool calls)${RESET}`);
   } else {
     run.toolCalls.forEach((tc, i) => {
@@ -47,7 +51,8 @@ function printRun(label: string, color: string, run: AgentRun) {
   lines.slice(0, 6).forEach(l => console.log(`  ${WHITE}${l}${RESET}`));
   if (lines.length > 6) console.log(`  ${DIM}...${RESET}`);
 
-  console.log(`\n  ${DIM}Total latency: ${YELLOW}${run.totalLatencyMs}ms${RESET}  ${DIM}Tokens: ${CYAN}${run.inputTokens + run.outputTokens}${RESET}  ${DIM}Tool calls: ${RED}${run.toolCalls.length}${RESET}`);
+  const llmTurnsStr = run.llmTurns !== undefined ? `  ${DIM}LLM turns: ${CYAN}${run.llmTurns}${RESET}` : '';
+  console.log(`\n  ${DIM}Total latency: ${YELLOW}${run.totalLatencyMs}ms${RESET}  ${DIM}Tokens: ${CYAN}${run.inputTokens + run.outputTokens}${RESET}  ${DIM}Tool calls: ${color}${run.toolCalls.length}${RESET}${llmTurnsStr}`);
 }
 
 async function main() {
@@ -75,18 +80,25 @@ async function main() {
   ]);
 
   printRun('WITHOUT OneCall  (raw tool calls)', RED, without);
-  printRun('WITH OneCall  (get_work_state)', GREEN, with_);
+  printRun('WITH OneCall  (harness injection)', GREEN, with_);
 
   // Delta summary
   const toolDelta = without.toolCalls.length - with_.toolCalls.length;
+  const turnDelta = (without.llmTurns ?? 1) - (with_.llmTurns ?? 1);
   const latDelta = without.totalLatencyMs - with_.totalLatencyMs;
   const tokDelta = (without.inputTokens + without.outputTokens) - (with_.inputTokens + with_.outputTokens);
-  const toolPct = (toolDelta / without.toolCalls.length * 100).toFixed(0);
+  const toolPct = without.toolCalls.length > 0
+    ? (toolDelta / without.toolCalls.length * 100).toFixed(0)
+    : '0';
+  const turnPct = (without.llmTurns ?? 1) > 0
+    ? (turnDelta / (without.llmTurns ?? 1) * 100).toFixed(0)
+    : '0';
   const latPct = (latDelta / without.totalLatencyMs * 100).toFixed(0);
   const tokPct = (tokDelta / (without.inputTokens + without.outputTokens) * 100).toFixed(0);
 
   console.log(`\n${BOLD}${GREEN}─── Result ──────────────────────────────────────────${RESET}`);
   console.log(`  Tool calls:  ${RED}${without.toolCalls.length}${RESET} → ${GREEN}${with_.toolCalls.length}${RESET}  ${BOLD}(${toolPct}% fewer)${RESET}`);
+  console.log(`  LLM turns:   ${RED}${without.llmTurns ?? 1}${RESET} → ${GREEN}${with_.llmTurns ?? 1}${RESET}  ${BOLD}(${turnPct}% fewer)${RESET}`);
   console.log(`  Latency:     ${RED}${without.totalLatencyMs}ms${RESET} → ${GREEN}${with_.totalLatencyMs}ms${RESET}  ${BOLD}(${latPct}% faster)${RESET}`);
   console.log(`  Tokens:      ${RED}${without.inputTokens + without.outputTokens}${RESET} → ${GREEN}${with_.inputTokens + with_.outputTokens}${RESET}  ${BOLD}(${tokPct}% fewer)${RESET}`);
   console.log();

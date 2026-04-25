@@ -12,6 +12,10 @@ export interface AgentRun {
   totalLatencyMs: number;
   inputTokens: number;
   outputTokens: number;
+  /** Number of LLM API calls made during this run (agentic loop turns). */
+  llmTurns?: number;
+  /** Whether the work context was auto-injected by the harness rather than fetched via tool calls. */
+  snapshotInjected?: boolean;
 }
 
 export interface ToolCallRecord {
@@ -124,8 +128,10 @@ export async function runWithoutOneCall(
   let inputTokens = 0;
   let outputTokens = 0;
   let finalResponse = '';
+  let llmTurns = 0;
 
   while (true) {
+    llmTurns++;
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -173,5 +179,7 @@ export async function runWithoutOneCall(
     totalLatencyMs: Date.now() - startTime,
     inputTokens,
     outputTokens,
+    llmTurns,
+    snapshotInjected: false,
   };
 }

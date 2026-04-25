@@ -9,6 +9,8 @@ interface Result {
   prompt: string;
   withoutToolCalls: number;
   withToolCalls: number;
+  withoutLlmTurns: number;
+  withLlmTurns: number;
   withoutLatencyMs: number;
   withLatencyMs: number;
   withoutTokens: number;
@@ -48,6 +50,8 @@ async function main() {
       prompt: prompt.text,
       withoutToolCalls: without.toolCalls.length,
       withToolCalls: with_.toolCalls.length,
+      withoutLlmTurns: without.llmTurns ?? 1,
+      withLlmTurns: with_.llmTurns ?? 1,
       withoutLatencyMs: without.totalLatencyMs,
       withLatencyMs: with_.totalLatencyMs,
       withoutTokens: without.inputTokens + without.outputTokens,
@@ -60,13 +64,18 @@ async function main() {
   // Aggregate
   const totalWithout = results.reduce((s, r) => s + r.withoutToolCalls, 0);
   const totalWith = results.reduce((s, r) => s + r.withToolCalls, 0);
+  const totalTurnsWithout = results.reduce((s, r) => s + r.withoutLlmTurns, 0);
+  const totalTurnsWith = results.reduce((s, r) => s + r.withLlmTurns, 0);
   const avgLatWithout = results.reduce((s, r) => s + r.withoutLatencyMs, 0) / results.length;
   const avgLatWith = results.reduce((s, r) => s + r.withLatencyMs, 0) / results.length;
   const avgTokWithout = results.reduce((s, r) => s + r.withoutTokens, 0) / results.length;
   const avgTokWith = results.reduce((s, r) => s + r.withTokens, 0) / results.length;
   const toolCallReduction = ((totalWithout - totalWith) / totalWithout * 100).toFixed(1);
+  const turnReduction = ((totalTurnsWithout - totalTurnsWith) / totalTurnsWithout * 100).toFixed(1);
   const latencyReduction = ((avgLatWithout - avgLatWith) / avgLatWithout * 100).toFixed(1);
   const tokenReduction = ((avgTokWithout - avgTokWith) / avgTokWithout * 100).toFixed(1);
+  const avgTurnsWithout = (totalTurnsWithout / results.length).toFixed(1);
+  const avgTurnsWith = (totalTurnsWith / results.length).toFixed(1);
 
   // Print table
   const cols = {
@@ -74,6 +83,8 @@ async function main() {
     prompt: 42,
     wo: 8,
     wi: 6,
+    woTurns: 8,
+    wiTurns: 6,
     woLat: 10,
     wiLat: 8,
     woTok: 10,
@@ -85,6 +96,8 @@ async function main() {
     pad('Prompt', cols.prompt),
     rpad('W/o calls', cols.wo),
     rpad('W/ calls', cols.wi),
+    rpad('W/o turns', cols.woTurns),
+    rpad('W/ turns', cols.wiTurns),
     rpad('W/o ms', cols.woLat),
     rpad('W/ ms', cols.wiLat),
     rpad('W/o tokens', cols.woTok),
@@ -103,6 +116,8 @@ async function main() {
       pad(r.prompt, cols.prompt),
       rpad(String(r.withoutToolCalls), cols.wo),
       rpad(String(r.withToolCalls), cols.wi),
+      rpad(String(r.withoutLlmTurns), cols.woTurns),
+      rpad(String(r.withLlmTurns), cols.wiTurns),
       rpad(String(r.withoutLatencyMs), cols.woLat),
       rpad(String(r.withLatencyMs), cols.wiLat),
       rpad(String(r.withoutTokens), cols.woTok),
@@ -114,6 +129,7 @@ async function main() {
   console.log(`
 SUMMARY (${results.length} prompts)
   Tool call reduction:  ${toolCallReduction}%  (${totalWithout} → ${totalWith} total calls)
+  LLM turn reduction:   ${turnReduction}%  (avg ${avgTurnsWithout} → ${avgTurnsWith} turns/query)
   Avg latency reduction: ${latencyReduction}%  (${avgLatWithout.toFixed(0)}ms → ${avgLatWith.toFixed(0)}ms)
   Avg token reduction:  ${tokenReduction}%  (${avgTokWithout.toFixed(0)} → ${avgTokWith.toFixed(0)} tokens/query)
 `);
