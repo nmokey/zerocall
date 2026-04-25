@@ -4,3 +4,8 @@ dist/
 tokens.json
 *.db
 *.sqlite
+
+onecall.db
+onecall.db-shm
+onecall.db-wal
+tokens.json
