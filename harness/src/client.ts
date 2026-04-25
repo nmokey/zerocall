@@ -11,15 +11,16 @@ import type { WorkStateSnapshot } from './types.js';
  * and answers in a single generation pass.
  *
  * @param snapshotGetter - Called on every request to retrieve the current
- *   snapshot. Use `() => MOCK_SNAPSHOT` for demo/testing, or
- *   `readLatestSnapshot` for live production use.
+ *   snapshot. May return synchronously or as a Promise.
+ *   Use `() => MOCK_SNAPSHOT` for demo/testing, or an async function
+ *   like `ensureFreshSnapshot` for live use with lazy caching.
  */
 export class OneCallAnthropic extends Anthropic {
-  private readonly snapshotGetter: () => WorkStateSnapshot | null;
+  private readonly snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
 
   constructor(
     opts: ConstructorParameters<typeof Anthropic>[0] & {
-      snapshotGetter: () => WorkStateSnapshot | null;
+      snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
     }
   ) {
     const { snapshotGetter, ...anthropicOpts } = opts;
@@ -35,7 +36,7 @@ export class OneCallAnthropic extends Anthropic {
     const body = options.body;
     if (typeof body !== 'object' || body === null || Array.isArray(body)) return;
 
-    const snapshot = this.snapshotGetter();
+    const snapshot = await Promise.resolve(this.snapshotGetter());
     if (!snapshot) return;
 
     // Handle string | undefined; leave TextBlockParam[] untouched

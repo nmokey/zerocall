@@ -18,15 +18,13 @@
     "dotenv": "latest",
     "express": "^5.2.1",
     "google-auth-library": "latest",
-    "googleapis": "latest",
-    "node-cron": "latest"
+    "googleapis": "latest"
   },
   "devDependencies": {
     "@types/better-sqlite3": "latest",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "latest",
-    "@types/node-cron": "latest",
     "tsx": "latest",
     "typescript": "latest"
   }

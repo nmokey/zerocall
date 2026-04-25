@@ -13,7 +13,7 @@ import type { AgentRun } from './types.js';
  * @returns An agent function with signature (client, prompt) => Promise<AgentRun>.
  */
 export function createRunWithOneCall(
-  snapshotGetter: () => WorkStateSnapshot | null,
+  snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>,
 ): (_client: Anthropic, prompt: string) => Promise<AgentRun> {
   return async (_client: Anthropic, prompt: string): Promise<AgentRun> => {
     const client = new OneCallAnthropic({
