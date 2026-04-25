@@ -2,7 +2,7 @@
 
 **Your AI assistant reads the room before you ask.**
 
-A read-once cache for your work life — one tool call instead of ten.
+Zero tool calls. One LLM turn. Context already there.
 
 ---
 
@@ -14,22 +14,44 @@ Work state doesn't change that fast, but agents act like it does.
 
 ## The Fix
 
-OneCall is an MCP server that maintains a continuously-updated snapshot of your work context. Any agent calls `get_work_state()` once and gets back everything it needs — current calendar, emails requiring action, and tasks by priority — in a single structured response.
+OneCall is an **agent harness** that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt — before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
-**Before OneCall:** 6–8 tool calls, ~4–6 seconds per productivity query  
-**After OneCall:** 1 tool call, sub-100ms response
+**Before OneCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query
+**After OneCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
+
+The key insight: we didn't give Claude a better tool. We changed what Claude knows before it starts thinking.
 
 ---
 
 ## How It Works
 
-1. OneCall runs as a background process alongside your AI agent
-2. Every 15 minutes, it polls Gmail, Google Calendar, and Notion
-3. It distills raw API responses into a clean `WorkStateSnapshot`
-4. The snapshot is persisted to a local SQLite database
-5. When your agent calls `get_work_state()`, it reads from SQLite — no network round-trips
+### Background sync loop
 
-The server is agent-agnostic: works with Claude Desktop, Cursor, Windsurf, or any MCP-compatible host.
+OneCall runs a background sync every 15 minutes (configurable), polling Gmail, Google Calendar, and Notion in parallel. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database.
+
+### Harness-level injection
+
+`OneCallAnthropic` subclasses the Anthropic SDK client and overrides `prepareOptions()` — a lifecycle hook that fires before every request is sent. On every `messages.create()` call, it reads the latest snapshot from SQLite (sub-millisecond) and splices it into the `system` prompt as a compact plain-text block. The calling code passes no tools and no system prompt; injection is invisible.
+
+```typescript
+import { OneCallAnthropic } from './src/client.js';
+
+const client = new OneCallAnthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  snapshotGetter: readLatestSnapshot, // or () => MOCK_SNAPSHOT for demo
+});
+
+// No tools. No system prompt. The harness injects the full work context.
+const response = await client.messages.create({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'What should I focus on right now?' }],
+});
+```
+
+### MCP server (optional)
+
+OneCall also exposes a `get_work_state()` MCP tool for compatibility with Claude Desktop, Cursor, and other MCP hosts. This is a deployment option — the demo and benchmark use the harness injection path.
 
 ---
 
@@ -51,10 +73,10 @@ Fill in `.env`:
 
 | Variable | Where to get it |
 |---|---|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application, redirect URI: `http://localhost:3000/oauth2callback`). Enable Gmail API and Google Calendar API in the library. Add your email as a test user on the OAuth consent screen. |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application, redirect URI: `http://localhost:3000/oauth2callback`). Enable Gmail API and Google Calendar API. Add your email as a test user on the OAuth consent screen. |
 | `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret |
-| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`) |
+| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL |
 
 ### 3. Build
 
@@ -77,7 +99,7 @@ Once authenticated, the first sync runs immediately:
 [sync] done in 22547ms — sources: gmail, gcal, notion
 ```
 
-### 5. Connect to Claude Desktop
+### 5. Connect to Claude Desktop (optional)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -96,41 +118,48 @@ Restart Claude Desktop. The `get_work_state` and `trigger_sync` tools appear aut
 
 ---
 
-## MCP Tools
+## Injected Context Format
 
-### `get_work_state()`
+The snapshot is rendered as a compact plain-text block (not raw JSON) before injection, so it reads cleanly and uses fewer tokens:
 
-Returns the latest cached snapshot. Sub-millisecond read from SQLite — no network calls.
-
-```json
-{
-  "as_of": "2026-04-24T14:30:00Z",
-  "calendar": {
-    "today": [...],
-    "free_blocks": [...],
-    "upcoming_deadlines": [...]
-  },
-  "email": {
-    "action_required": [...],
-    "awaiting_reply": [...],
-    "unread_count": 12
-  },
-  "tasks": {
-    "overdue": [...],
-    "due_today": [...],
-    "in_progress": [...]
-  },
-  "meta": {
-    "sync_duration_ms": 1840,
-    "sources": ["gmail", "gcal", "notion"],
-    "errors": []
-  }
-}
 ```
+--- ONECALL WORK CONTEXT (as of 2026-04-24T09:00:00Z) ---
 
-### `trigger_sync()`
+[CALENDAR TODAY]
+  • 10:00–11:00  Arvind Lab Meeting  (Boelter 4760)  https://zoom.us/j/123456789
+  • 14:00–15:30  CS 269 Lecture  (Franz Hall 1178)
+  • 16:00–16:30  Research sync w/ Sarah
 
-Forces an immediate re-sync outside the normal 15-minute window. Use when data feels stale.
+[FREE BLOCKS TODAY]
+  09:00–10:00 (60 min), 11:00–14:00 (180 min), 15:30–16:00 (30 min)
+
+[UPCOMING DEADLINES]
+  • 2026-04-26  CS 269 Project Proposal Due
+  • 2026-04-28  Deadline: ICML submission
+
+[EMAIL — ACTION REQUIRED]
+  • Arvind Kumar <arvind@cs.ucla.edu>: "Action items from today's lab meeting" — ...
+  • Sarah Chen <sarah@cs.ucla.edu>: "Re: ICML submission — author list" — ...
+  • Prof. Cho <cho@cs.ucla.edu>: "TA office hours coverage this week" — ...
+
+[EMAIL — AWAITING REPLY]
+  • HPC Support (waiting since 2026-04-22): "GPU cluster access request"
+  • Marcus Lee (waiting since 2026-04-23): "Coffee chat?"
+  Total unread: 14
+
+[TASKS — OVERDUE]
+  • Write related work section for ICML draft (due 2026-04-22)
+
+[TASKS — DUE TODAY]
+  • Set up eval pipeline for benchmark suite
+  • Review Sarah's lit review draft
+
+[TASKS — IN PROGRESS]
+  • Implement attention visualization module
+  • Reproduce baseline results from prior paper
+
+--- END ONECALL CONTEXT ---
+```
 
 ---
 
@@ -150,11 +179,11 @@ The `demo/` directory contains two scripts for showing the before/after story.
 
 ### Setup
 
-Make sure `ANTHROPIC_API_KEY` is set in `.env`. Both scripts call the Claude API directly.
+Make sure `ANTHROPIC_API_KEY` is set in `.env`. Both scripts call the Claude API directly using mocked provider data.
 
 ### `npm run demo:trace` — side-by-side trace
 
-Runs one prompt through both agents in parallel and prints a color-coded tool call trace with per-call latency and token counts.
+Runs one prompt through both agents in parallel and prints a color-coded trace.
 
 ```bash
 npm run demo:trace              # default: "What are my action items from Arvind's lab?"
@@ -166,26 +195,30 @@ Sample output:
 
 ```
 WITHOUT OneCall  (raw tool calls)
-  1. gmail_search_threads  {"query":"newer_than:2d"}   12ms
-  2. gmail_get_thread  {"thread_id":"th_001"}           8ms
-  3. calendar_list_events  {"time_min":"..."}           9ms
-  4. notion_query_database  {}                         11ms
+  1. gmail_search_threads  {"query":"Arvind lab action items"}   1ms
+  2. calendar_list_events  {"time_min":"...","time_max":"..."}   0ms
+  3. gmail_search_threads  {"query":"Arvind lab meeting notes"}  0ms
+  4. gmail_get_thread  {"thread_id":"th_001"}                    0ms
+  5. gmail_get_thread  {"thread_id":"th_002"}                    0ms
 
-  Total: 2340ms   Tokens: 3120   Tool calls: 4
+  Total: 19424ms   Tokens: 7152   Tool calls: 5   LLM turns: 3
 
-WITH OneCall
-  1. get_work_state                                     0ms
+WITH OneCall  (harness injection)
+  ✦ Work context auto-injected into system prompt
+  (0 tool calls — harness injected the snapshot before first token)
 
-  Total: 890ms   Tokens: 2180   Tool calls: 1
+  Total: 6318ms   Tokens: 872   Tool calls: 0   LLM turns: 1
 
-  Tool calls: 4 → 1  (75% fewer)
-  Latency:    2340ms → 890ms  (62% faster)
-  Tokens:     3120 → 2180  (30% fewer)
+─── Result ───────────────────────────────────────────
+  Tool calls:  5 → 0  (100% fewer)
+  LLM turns:   3 → 1  (67% fewer)
+  Latency:     19424ms → 6318ms  (67% faster)
+  Tokens:      7152 → 872  (88% fewer)
 ```
 
 ### `npm run demo:benchmark` — 20-prompt metrics table
 
-Runs all 20 prompts and prints a comparison table plus aggregate summary.
+Runs all 20 prompts and prints a comparison table plus aggregate summary including tool call reduction, LLM turn reduction, latency, and token counts.
 
 ```bash
 npm run demo:benchmark
@@ -197,20 +230,16 @@ npm run demo:benchmark
 
 ## Current Evaluation Limitations
 
-Both demo scripts currently use **mocked provider data** (`demo/data/mock.ts`) for both agents. This means:
-
-- The "without" agent's tool handlers return static mock responses, not live API calls
-- The "with" agent returns a pre-built mock snapshot, not the real SQLite snapshot
-- The evaluation measures *tool call structure* (how many calls Claude makes given different schemas), not end-to-end correctness
+Both demo scripts use **mocked provider data** (`demo/data/mock.ts`) for both agents. This measures *tool call structure and LLM turn count* given different agent configurations, not end-to-end correctness against live data.
 
 **The ideal evaluation** (not yet implemented) would:
 
 1. Have `syncAll()` run against real providers to populate SQLite
 2. Have the "without" agent call the real Gmail/Calendar/Notion APIs live
-3. Have the "with" agent read the SQLite snapshot those same APIs produced
+3. Have the "with" agent read from `readLatestSnapshot()` — the same data the background sync produced
 4. Compare both agents' answers for correctness, not just tool call count
 
-To wire the "with" agent to your real snapshot today, update `demo/agents/with.ts` to call `readLatestSnapshot()` from `src/db/snapshot.ts` instead of returning `MOCK_SNAPSHOT`.
+To wire the "with" agent to your real snapshot today, update the `snapshotGetter` in `demo/agents/with.ts` to call `readLatestSnapshot` from `src/db/snapshot.ts` instead of returning `MOCK_SNAPSHOT`.
 
 ---
 
@@ -219,6 +248,7 @@ To wire the "with" agent to your real snapshot today, update `demo/agents/with.t
 ```
 onecall/
 ├── src/
+│   ├── client.ts             # OneCallAnthropic — SDK subclass with harness injection
 │   ├── index.ts              # Entry point — initializes DB, starts scheduler, connects MCP server
 │   ├── server.ts             # MCP tool registration (get_work_state, trigger_sync)
 │   ├── types/
@@ -238,10 +268,10 @@ onecall/
 │       ├── syncAll.ts        # Parallel provider fetch → snapshot → SQLite
 │       └── scheduler.ts      # node-cron loop + startup sync
 ├── demo/
-│   ├── data/mock.ts          # Realistic mock work context for evaluation
+│   ├── data/mock.ts          # Realistic mock work context (UCLA research student)
 │   ├── agents/
-│   │   ├── without.ts        # Agent with raw Gmail/Calendar/Notion tools
-│   │   └── with.ts           # Agent with only get_work_state()
+│   │   ├── without.ts        # Agent with raw Gmail/Calendar/Notion tools (multi-turn)
+│   │   └── with.ts           # Agent using OneCallAnthropic harness (single turn, 0 tools)
 │   ├── prompts.ts            # 20 representative productivity prompts
 │   ├── trace.ts              # Single-prompt side-by-side trace
 │   └── benchmark.ts          # 20-prompt metrics table
