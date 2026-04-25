@@ -9,7 +9,9 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "demo:trace": "tsx demo/trace.ts",
-    "demo:benchmark": "tsx demo/benchmark.ts"
+    "demo:benchmark": "tsx demo/benchmark.ts",
+    "live:trace": "tsx live/trace.ts",
+    "live:benchmark": "tsx live/benchmark.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
