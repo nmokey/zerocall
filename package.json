@@ -9,10 +9,10 @@
     "build:server": "npm run build -w server",
     "start": "npm start -w server",
     "dev": "npm run dev -w server",
-    "demo:trace": "tsx demo/trace.ts",
-    "demo:benchmark": "tsx demo/benchmark.ts",
-    "live:trace": "tsx live/trace.ts",
-    "live:benchmark": "tsx live/benchmark.ts"
+    "demo:trace": "npm run build:harness && tsx demo/trace.ts",
+    "demo:benchmark": "npm run build:harness && tsx demo/benchmark.ts",
+    "live:trace": "npm run build:harness && tsx live/trace.ts",
+    "live:benchmark": "npm run build:harness && tsx live/benchmark.ts"
   },
   "devDependencies": {
     "dotenv": "latest",
