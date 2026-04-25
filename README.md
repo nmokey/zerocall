@@ -71,12 +71,14 @@ cp .env.example .env
 
 Fill in `.env`:
 
-| Variable | Where to get it |
-|---|---|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
+
+| Variable                                    | Where to get it                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`                         | [console.anthropic.com](https://console.anthropic.com) → API Keys                                                                                                                                                                                                                                   |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application, redirect URI: `http://localhost:3000/oauth2callback`). Enable Gmail API and Google Calendar API. Add your email as a test user on the OAuth consent screen. |
-| `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret |
-| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL |
+| `NOTION_TOKEN`                              | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret                                                                                                                                                                        |
+| `NOTION_DATABASE_ID`                        | 32-char hex ID from your Notion task database URL                                                                                                                                                                                                                                                   |
+
 
 ### 3. Build
 

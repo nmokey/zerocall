@@ -1,11 +1,17 @@
 node_modules/
 dist/
 .env
+.env.bak
 tokens.json
 *.db
 *.sqlite
 
+<<<<<<< HEAD
 onecall.db
 onecall.db-shm
 onecall.db-wal
 tokens.json
+=======
+onecall.db-shm
+onecall.db-wal
+>>>>>>> 47d3ad2 (HTTP API server, React dashboard, and live demo scripts)

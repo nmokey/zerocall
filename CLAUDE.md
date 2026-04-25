@@ -38,13 +38,15 @@ The original design was an MCP server exposing `get_work_state()`. A Cognition e
 
 ### Overview
 
-OneCall has two layers:
+OneCall has three layers:
 
 **Layer 1: Background sync** — A node-cron loop that polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
 
 **Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond) and injects it into `options.body.system` as a structured plain-text block.
 
-The MCP server (`src/index.ts` + `src/server.ts`) is retained as an optional deployment mode for Claude Desktop and other MCP hosts, but the demo and primary judge story use harness injection.
+**Layer 3: HTTP API + dashboard** — An Express server exposes a REST API on port 3000. A Vite + React frontend (in `web/`) connects to it. The dashboard handles first-run setup (credential entry + Google OAuth), shows the current snapshot, and lets users trigger a manual sync.
+
+There is no MCP server. State delivery is exclusively through harness injection.
 
 ---
 
@@ -53,13 +55,15 @@ The MCP server (`src/index.ts` + `src/server.ts`) is retained as an optional dep
 ```
 onecall/
 ├── src/
+│   ├── main.ts               # Entrypoint: initSchema + startScheduler + HTTP server
 │   ├── client.ts             # OneCallAnthropic — SDK subclass with harness injection
-│   ├── index.ts              # MCP server entry point
-│   ├── server.ts             # MCP tool registration (get_work_state, trigger_sync)
+│   ├── api/
+│   │   ├── server.ts         # Express HTTP server — all /api/* routes + /oauth2callback
+│   │   └── config.ts         # Credential validation + .env writing
 │   ├── sync/
 │   │   ├── scheduler.ts      # node-cron polling loop
-│   │   ├── syncAll.ts        # orchestrates a full sync across all providers
-│   │   └── webhooks.ts       # optional: Gmail push notification handler
+│   │   ├── syncAll.ts        # Orchestrates a full sync across all providers
+│   │   └── webhooks.ts       # Optional: Gmail push notification handler
 │   ├── providers/
 │   │   ├── types.ts          # TaskProvider interface + shared types
 │   │   ├── gmail.ts          # Gmail API integration
@@ -67,17 +71,29 @@ onecall/
 │   │   └── notion.ts         # Notion API integration
 │   ├── db/
 │   │   ├── client.ts         # better-sqlite3 singleton
-│   │   ├── schema.ts         # table definitions + migrations
-│   │   └── snapshot.ts       # read/write WorkStateSnapshot to SQLite
+│   │   ├── schema.ts         # Table definitions + migrations
+│   │   └── snapshot.ts       # Read/write WorkStateSnapshot + sync log
 │   ├── auth/
-│   │   └── google.ts         # OAuth2 flow via google-auth-library
+│   │   └── google.ts         # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
 │   └── types/
 │       └── snapshot.ts       # WorkStateSnapshot TypeScript types
+├── web/                      # Vite + React frontend
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx           # Checks /api/status → routes to Setup or Dashboard
+│   │   ├── api.ts            # Typed fetch wrappers for all /api/* endpoints
+│   │   └── pages/
+│   │       ├── Setup.tsx     # Two-step: credential form → Google OAuth
+│   │       └── Dashboard.tsx # Snapshot view + sync status + Sync Now button
+│   ├── vite.config.ts        # Dev proxy: /api/* and /oauth2callback → localhost:3000
+│   ├── index.html
+│   ├── package.json
+│   └── tsconfig.json
 ├── demo/
 │   ├── data/mock.ts          # Static WorkStateSnapshot + raw provider slices
 │   ├── agents/
 │   │   ├── without.ts        # Multi-turn agent with raw Gmail/Calendar/Notion tools
-│   │   └── with.ts           # Single-turn agent using OneCallAnthropic harness (0 tools)
+│   │   └── with.ts           # Single-turn agent using OneCallAnthropic (0 tools)
 │   ├── prompts.ts            # 20 representative productivity prompts
 │   ├── trace.ts              # Single-prompt color-coded side-by-side trace
 │   └── benchmark.ts          # Sequential 20-prompt run → metrics table + summary
@@ -170,23 +186,20 @@ For the hackathon, Notion is implemented. The interface ensures Linear and Todoi
 
 ---
 
-### MCP Tool Specification (secondary deployment mode)
+### HTTP API (`src/api/server.ts`)
 
-```typescript
-{
-  name: "get_work_state",
-  description: "Returns a pre-computed, structured snapshot of the user's current work context — calendar events, email threads requiring action, and tasks by status. Replaces separate calendar, email, and task tool calls. Data is refreshed every 15 minutes in the background.",
-  inputSchema: { type: "object", properties: {}, required: [] }
-}
-```
+The Express server runs on port 3000. In production it also serves `web/dist/` as static files. During development, Vite proxies `/api/*` and `/oauth2callback` to port 3000.
 
-```typescript
-{
-  name: "trigger_sync",
-  description: "Forces an immediate re-sync of all data sources outside the normal polling interval. Use when the user reports stale data.",
-  inputSchema: { type: "object", properties: {}, required: [] }
-}
-```
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/status` | `{ configured, authenticated, lastSync, lastSyncSuccess }` |
+| `GET` | `/api/config` | `{ present, missing }` — which required keys are set (no values exposed) |
+| `POST` | `/api/config` | Validate + write credentials to `.env`, apply to `process.env` |
+| `GET` | `/api/snapshot` | Latest `WorkStateSnapshot` \| `null` |
+| `POST` | `/api/sync` | Trigger immediate sync (fire-and-forget) |
+| `GET` | `/api/auth/google` | `{ url }` — Google OAuth initiation URL |
+| `GET` | `/oauth2callback` | Handles Google OAuth redirect, exchanges code for tokens, redirects to `/` |
+| `GET` | `/*` | Serves `web/dist/index.html` (production only) |
 
 ---
 
@@ -232,7 +245,7 @@ CREATE TABLE IF NOT EXISTS sync_log (
 );
 ```
 
-Keep only the last 10 snapshots. `get_work_state()` and `readLatestSnapshot()` both read `SELECT snapshot FROM snapshots ORDER BY id DESC LIMIT 1`.
+Keep only the last 10 snapshots. `readLatestSnapshot()` reads `SELECT snapshot FROM snapshots ORDER BY id DESC LIMIT 1`. `readLastSyncLog()` reads the most recent sync_log row for the `/api/status` endpoint.
 
 ---
 
@@ -250,11 +263,12 @@ syncAll(); // run once immediately on startup
 
 ### Auth Setup
 
-Google OAuth2 flow:
-1. On first run, if no stored token exists, open the OAuth consent URL in the browser
-2. User grants access, Google redirects with auth code
-3. Exchange for access + refresh token, persist to `tokens.json`
-4. On subsequent runs, load the token and refresh automatically
+Google OAuth2 flow (handled by the backend + frontend together):
+1. Frontend calls `GET /api/auth/google` to get the OAuth consent URL
+2. Frontend redirects the browser to that URL
+3. User grants access; Google redirects to `GET /oauth2callback` on the backend
+4. Backend exchanges the auth code for tokens, persists to `tokens.json`, redirects browser to `/`
+5. On subsequent runs, `getAuthenticatedClient()` loads the token and refreshes automatically if expired
 
 Scopes: `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/calendar.readonly`
 
@@ -282,9 +296,8 @@ SYNC_INTERVAL_MINUTES=15
 WORK_DAY_START=09:00
 WORK_DAY_END=18:00
 
-# Optional: Gmail push notifications
-GMAIL_WEBHOOK_PORT=3001
-GMAIL_TOPIC_NAME=
+# Server
+PORT=3000
 ```
 
 ---
@@ -295,42 +308,30 @@ GMAIL_TOPIC_NAME=
 {
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
-    "@modelcontextprotocol/sdk": "latest",
     "@notionhq/client": "latest",
     "better-sqlite3": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
     "google-auth-library": "latest",
     "googleapis": "latest",
-    "node-cron": "latest",
-    "dotenv": "latest"
+    "node-cron": "latest"
   },
   "devDependencies": {
     "@types/better-sqlite3": "latest",
+    "@types/cors": "latest",
+    "@types/express": "latest",
     "@types/node": "latest",
     "@types/node-cron": "latest",
     "typescript": "latest",
     "tsx": "latest"
   },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
+    "build": "tsc && cd web && npm run build",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
     "demo:trace": "tsx demo/trace.ts",
     "demo:benchmark": "tsx demo/benchmark.ts"
-  }
-}
-```
-
----
-
-### Claude Desktop Integration (optional)
-
-```json
-{
-  "mcpServers": {
-    "onecall": {
-      "command": "node",
-      "args": ["/absolute/path/to/onecall/dist/index.js"]
-    }
   }
 }
 ```
@@ -390,11 +391,11 @@ npm run demo:benchmark          # all 20 prompts, sequential to avoid rate limit
 
 ## What NOT to Build
 
-- Do not build a UI — this is infrastructure for agents, not a human-facing app
 - Do not implement write operations (creating tasks, sending emails) — read-only scope keeps auth simple and demo safe
 - Do not try to support every task manager — Notion is sufficient for the demo; the `TaskProvider` interface signals extensibility
 - Do not implement semantic search or vector embeddings — the snapshot is intentionally structured, not a RAG system
 - Do not add a tool-call flow back to the "with" agent — the entire point is zero tool calls
+- Do not add an MCP server — state delivery is through harness injection only
 
 ---
 

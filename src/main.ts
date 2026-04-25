@@ -1,16 +1,18 @@
 import 'dotenv/config';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { initSchema } from './db/schema.js';
 import { startScheduler } from './sync/scheduler.js';
-import { createServer } from './server.js';
+import { createApiServer } from './api/server.js';
+
+const PORT = parseInt(process.env.PORT ?? '3000');
 
 async function main() {
   initSchema();
   startScheduler();
 
-  const server = createServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const app = createApiServer();
+  app.listen(PORT, () => {
+    console.log(`[onecall] running at http://localhost:${PORT}`);
+  });
 }
 
 main().catch(err => {

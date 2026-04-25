@@ -1,7 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs';
 import path from 'path';
-import http from 'http';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,49 +30,40 @@ function saveTokens(client: OAuth2Client): void {
   fs.writeFileSync(TOKENS_PATH, JSON.stringify(client.credentials, null, 2));
 }
 
-export async function getAuthenticatedClient(): Promise<OAuth2Client> {
+export function isAuthenticated(): boolean {
+  return fs.existsSync(TOKENS_PATH);
+}
+
+export function getOAuthUrl(): string {
   const client = createOAuthClient();
+  return client.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
+}
 
-  if (loadTokens(client)) {
-    // Refresh if expired
-    const expiry = client.credentials.expiry_date;
-    if (expiry && expiry < Date.now()) {
-      const { credentials } = await client.refreshAccessToken();
-      client.setCredentials(credentials);
-      saveTokens(client);
-    }
-    return client;
-  }
-
-  // First run: open browser for OAuth consent
-  const authUrl = client.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
-  console.log('\nOpen this URL in your browser to authenticate:\n');
-  console.log(authUrl);
-  console.log();
-
-  // Start a local server to receive the redirect
-  const code = await new Promise<string>((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url!, 'http://localhost:3000');
-      const code = url.searchParams.get('code');
-      if (!code) {
-        res.end('Missing code. Try again.');
-        return reject(new Error('No code in redirect'));
-      }
-      res.end('Authentication successful! You can close this tab.');
-      server.close();
-      resolve(code);
-    });
-
-    const port = parseInt(process.env.GOOGLE_REDIRECT_URI?.split(':')[2]?.split('/')[0] ?? '3000');
-    server.listen(port, () => console.log(`Waiting for OAuth redirect on port ${port}...`));
-    server.on('error', reject);
-  });
-
+/** Exchanges the auth code from Google's redirect for tokens and persists them. */
+export async function exchangeCodeForTokens(code: string): Promise<void> {
+  const client = createOAuthClient();
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
   saveTokens(client);
-  console.log('Tokens saved to tokens.json\n');
+}
+
+/**
+ * Returns an authenticated OAuth2 client for use by providers.
+ * Throws if the user has not yet completed the OAuth flow.
+ */
+export async function getAuthenticatedClient(): Promise<OAuth2Client> {
+  const client = createOAuthClient();
+
+  if (!loadTokens(client)) {
+    throw new Error('Not authenticated. Complete Google OAuth via the dashboard first.');
+  }
+
+  const expiry = client.credentials.expiry_date;
+  if (expiry && expiry < Date.now()) {
+    const { credentials } = await client.refreshAccessToken();
+    client.setCredentials(credentials);
+    saveTokens(client);
+  }
 
   return client;
 }
