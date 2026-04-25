@@ -49,10 +49,6 @@ const response = await client.messages.create({
 });
 ```
 
-### MCP server (optional)
-
-OneCall also exposes a `get_work_state()` MCP tool for compatibility with Claude Desktop, Cursor, and other MCP hosts. This is a deployment option — the demo and benchmark use the harness injection path.
-
 ---
 
 ## Quickstart
@@ -100,23 +96,6 @@ Once authenticated, the first sync runs immediately:
 [scheduler] polling every 15 minutes
 [sync] done in 22547ms — sources: gmail, gcal, notion
 ```
-
-### 5. Connect to Claude Desktop (optional)
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "onecall": {
-      "command": "node",
-      "args": ["/absolute/path/to/onecall/dist/index.js"]
-    }
-  }
-}
-```
-
-Restart Claude Desktop. The `get_work_state` and `trigger_sync` tools appear automatically.
 
 ---
 

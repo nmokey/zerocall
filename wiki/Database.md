@@ -86,7 +86,7 @@ function readLatestSnapshot(): WorkStateSnapshot | null {
 }
 ```
 
-This is the function used by `snapshotGetter` in production and by the `get_work_state` MCP tool.
+This is the function used by `snapshotGetter` in production.
 
 ---
 

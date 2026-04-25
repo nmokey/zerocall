@@ -79,21 +79,9 @@ See [Harness Injection](Harness-Injection.md) for details.
 
 ---
 
-## MCP Server (Optional)
-
-OneCall also exposes a `get_work_state()` MCP tool for compatibility with Claude Desktop, Cursor, and other MCP hosts. This is a secondary deployment mode — the demo and primary judge story use harness injection.
-
-**Key files:**
-- `src/index.ts` — entry point, initializes DB + scheduler + MCP transport
-- `src/server.ts` — MCP tool registration
-
-See [MCP Server](MCP-Server.md) for details.
-
----
-
 ## Why Not Just a Better Tool?
 
-The original design was an MCP server exposing `get_work_state()`. Feedback from Cognition pointed out that this still relies on the model's intelligence to decide to call the tool — it's just a better tool, not a paradigm shift.
+Traditional approaches expose work context through tools that the model must decide to call. This still relies on the model's intelligence to make the retrieval decision — it's just a better tool, not a paradigm shift.
 
 The harness injection approach removes model agency from the retrieval decision entirely. The context is injected at the SDK level before the model generates its first token. The model never needs to ask for it, and the calling code never needs to provide it.
 

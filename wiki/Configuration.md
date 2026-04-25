@@ -101,15 +101,6 @@ npm run live:trace        # after sync completes
 
 All credentials are required. On first `npm start`, follow the OAuth URL printed to the console.
 
-### MCP Server
-
-```bash
-npm run build
-npm start
-```
-
-Configure Claude Desktop to connect — see [MCP Server](MCP-Server.md).
-
 ---
 
 ## Files Generated at Runtime
