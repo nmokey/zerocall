@@ -47,9 +47,19 @@ export async function runBenchmark(agents: BenchmarkAgents): Promise<void> {
   const client = new Anthropic({ apiKey });
   const results: Result[] = [];
 
-  console.log(`\nRunning benchmark across ${PROMPTS.length} prompts...\n`);
+  // --prompt "custom text" runs a single custom prompt instead of the preset list
+  const promptFlagIdx = process.argv.indexOf('--prompt');
+  const customPrompt = promptFlagIdx !== -1 && process.argv[promptFlagIdx + 1]
+    ? process.argv[promptFlagIdx + 1]
+    : null;
 
-  for (const prompt of PROMPTS) {
+  const prompts = customPrompt
+    ? [{ id: 'custom', text: customPrompt }]
+    : PROMPTS;
+
+  console.log(`\nRunning benchmark across ${prompts.length} prompt${prompts.length === 1 ? '' : 's'}...\n`);
+
+  for (const prompt of prompts) {
     process.stdout.write(`  [${prompt.id}] ${prompt.text.slice(0, 50)}...`);
 
     const [without, with_] = await Promise.all([
@@ -72,7 +82,7 @@ export async function runBenchmark(agents: BenchmarkAgents): Promise<void> {
 
     process.stdout.write(` done\n`);
 
-    if (prompt !== PROMPTS[PROMPTS.length - 1]) {
+    if (prompt !== prompts[prompts.length - 1]) {
       await sleep(15000);
     }
   }
@@ -86,10 +96,14 @@ export async function runBenchmark(agents: BenchmarkAgents): Promise<void> {
   const avgLatWith = results.reduce((s, r) => s + r.withLatencyMs, 0) / results.length;
   const avgTokWithout = results.reduce((s, r) => s + r.withoutTokens, 0) / results.length;
   const avgTokWith = results.reduce((s, r) => s + r.withTokens, 0) / results.length;
-  const toolCallReduction = ((totalWithout - totalWith) / totalWithout * 100).toFixed(1);
-  const turnReduction = ((totalTurnsWithout - totalTurnsWith) / totalTurnsWithout * 100).toFixed(1);
-  const latencyReduction = ((avgLatWithout - avgLatWith) / avgLatWithout * 100).toFixed(1);
-  const tokenReduction = ((avgTokWithout - avgTokWith) / avgTokWithout * 100).toFixed(1);
+  const toolCallReduction = totalWithout > 0
+    ? ((totalWithout - totalWith) / totalWithout * 100).toFixed(1) : '0.0';
+  const turnReduction = totalTurnsWithout > 0
+    ? ((totalTurnsWithout - totalTurnsWith) / totalTurnsWithout * 100).toFixed(1) : '0.0';
+  const latencyReduction = avgLatWithout > 0
+    ? ((avgLatWithout - avgLatWith) / avgLatWithout * 100).toFixed(1) : '0.0';
+  const tokenReduction = avgTokWithout > 0
+    ? ((avgTokWithout - avgTokWith) / avgTokWithout * 100).toFixed(1) : '0.0';
   const avgTurnsWithout = (totalTurnsWithout / results.length).toFixed(1);
   const avgTurnsWith = (totalTurnsWith / results.length).toFixed(1);
 

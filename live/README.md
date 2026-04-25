@@ -50,6 +50,9 @@ npm run live:trace -- p04
 
 # Specific prompt by number (1–20)
 npm run live:trace -- 7
+
+# Custom prompt
+npm run live:trace -- --prompt "Can I squeeze in a workout today?"
 ```
 
 **Sample output:**
@@ -88,6 +91,9 @@ Runs all 20 prompts from `demo/prompts.ts` through both agents sequentially and 
 
 ```bash
 npm run live:benchmark
+
+# Or benchmark a single custom prompt
+npm run live:benchmark -- --prompt "Should I reschedule my 1:1?"
 ```
 
 Output is a table plus a summary block:
