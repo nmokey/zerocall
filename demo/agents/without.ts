@@ -1,28 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
+import type { Tool } from '@anthropic-ai/sdk/resources/messages.js';
+import { runAgentLoop } from '../../shared/agentLoop.js';
 import {
   MOCK_GMAIL_THREADS,
   MOCK_CALENDAR_EVENTS,
   MOCK_NOTION_TASKS,
 } from '../data/mock.js';
 
-export interface AgentRun {
-  toolCalls: ToolCallRecord[];
-  finalResponse: string;
-  totalLatencyMs: number;
-  inputTokens: number;
-  outputTokens: number;
-  /** Number of LLM API calls made during this run (agentic loop turns). */
-  llmTurns?: number;
-  /** Whether the work context was auto-injected by the harness rather than fetched via tool calls. */
-  snapshotInjected?: boolean;
-}
-
-export interface ToolCallRecord {
-  tool: string;
-  input: Record<string, unknown>;
-  latencyMs: number;
-}
+export type { AgentRun, ToolCallRecord } from '../../shared/types.js';
 
 const RAW_TOOLS: Tool[] = [
   {
@@ -116,70 +101,7 @@ function handleToolCall(name: string, input: Record<string, unknown>): unknown {
 
 export async function runWithoutOneCall(
   client: Anthropic,
-  prompt: string
-): Promise<AgentRun> {
-  const startTime = Date.now();
-  const toolCalls: ToolCallRecord[] = [];
-
-  const messages: MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
-
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let finalResponse = '';
-  let llmTurns = 0;
-
-  while (true) {
-    llmTurns++;
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      tools: RAW_TOOLS,
-      messages,
-    });
-
-    inputTokens += response.usage.input_tokens;
-    outputTokens += response.usage.output_tokens;
-
-    if (response.stop_reason === 'end_turn') {
-      const textBlock = response.content.find(b => b.type === 'text');
-      finalResponse = textBlock?.type === 'text' ? textBlock.text : '';
-      break;
-    }
-
-    if (response.stop_reason !== 'tool_use') break;
-
-    messages.push({ role: 'assistant', content: response.content });
-
-    const toolResults: ToolResultBlockParam[] = [];
-
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue;
-
-      const toolStart = Date.now();
-      const result = handleToolCall(block.name, block.input as Record<string, unknown>);
-      const latencyMs = Date.now() - toolStart;
-
-      toolCalls.push({ tool: block.name, input: block.input as Record<string, unknown>, latencyMs });
-
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-      });
-    }
-
-    messages.push({ role: 'user', content: toolResults });
-  }
-
-  return {
-    toolCalls,
-    finalResponse,
-    totalLatencyMs: Date.now() - startTime,
-    inputTokens,
-    outputTokens,
-    llmTurns,
-    snapshotInjected: false,
-  };
+  prompt: string,
+) {
+  return runAgentLoop(client, prompt, RAW_TOOLS, handleToolCall);
 }
