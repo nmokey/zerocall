@@ -34,7 +34,7 @@ OneCall runs a background sync every 15 minutes (configurable), polling Gmail, G
 `OneCallAnthropic` subclasses the Anthropic SDK client and overrides `prepareOptions()` — a lifecycle hook that fires before every request is sent. On every `messages.create()` call, it reads the latest snapshot from SQLite (sub-millisecond) and splices it into the `system` prompt as a compact plain-text block. The calling code passes no tools and no system prompt; injection is invisible.
 
 ```typescript
-import { OneCallAnthropic } from './src/client.js';
+import { OneCallAnthropic } from '@onecall/harness';
 
 const client = new OneCallAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -241,7 +241,7 @@ Both demo scripts use **mocked provider data** (`demo/data/mock.ts`) for both ag
 3. Have the "with" agent read from `readLatestSnapshot()` — the same data the background sync produced
 4. Compare both agents' answers for correctness, not just tool call count
 
-To wire the "with" agent to your real snapshot today, update the `snapshotGetter` in `demo/agents/with.ts` to call `readLatestSnapshot` from `src/db/snapshot.ts` instead of returning `MOCK_SNAPSHOT`.
+To wire the "with" agent to your real snapshot today, update the `snapshotGetter` in `demo/agents/with.ts` to call `readLatestSnapshot` from `server/src/db/snapshot.ts` instead of returning `MOCK_SNAPSHOT`.
 
 ---
 
@@ -249,37 +249,56 @@ To wire the "with" agent to your real snapshot today, update the `snapshotGetter
 
 ```
 onecall/
-├── src/
-│   ├── client.ts             # OneCallAnthropic — SDK subclass with harness injection
-│   ├── index.ts              # Entry point — initializes DB, starts scheduler, connects MCP server
-│   ├── server.ts             # MCP tool registration (get_work_state, trigger_sync)
-│   ├── types/
-│   │   └── snapshot.ts       # WorkStateSnapshot and all sub-interfaces
-│   ├── providers/
-│   │   ├── types.ts          # TaskProvider interface
-│   │   ├── gmail.ts          # Gmail API — thread classification
-│   │   ├── calendar.ts       # Google Calendar API — events + free block calculation
-│   │   └── notion.ts         # Notion API — task binning by due date/status
-│   ├── db/
-│   │   ├── client.ts         # better-sqlite3 singleton (WAL mode)
-│   │   ├── schema.ts         # Table creation on startup
-│   │   └── snapshot.ts       # Read/write WorkStateSnapshot + sync logging
-│   ├── auth/
-│   │   └── google.ts         # OAuth2 flow, token persistence, auto-refresh
-│   └── sync/
-│       ├── syncAll.ts        # Parallel provider fetch → snapshot → SQLite
-│       └── scheduler.ts      # node-cron loop + startup sync
-├── demo/
-│   ├── data/mock.ts          # Realistic mock work context (UCLA research student)
+├── harness/                   # @onecall/harness — SDK subclass + shared types
+│   ├── src/
+│   │   ├── index.ts           # Package entry point (re-exports)
+│   │   ├── client.ts          # OneCallAnthropic — prepareOptions injection
+│   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
+│   ├── package.json
+│   └── tsconfig.json
+├── server/                    # Background sync server + Express API
+│   ├── src/
+│   │   ├── main.ts            # Entry point — DB init, scheduler, HTTP server
+│   │   ├── api/
+│   │   │   ├── server.ts      # Express routes (/api/*, /oauth2callback)
+│   │   │   └── config.ts      # Credential validation + .env writing
+│   │   ├── auth/
+│   │   │   └── google.ts      # OAuth2 flow, token persistence, auto-refresh
+│   │   ├── db/
+│   │   │   ├── client.ts      # better-sqlite3 singleton (WAL mode)
+│   │   │   ├── schema.ts      # Table creation on startup
+│   │   │   └── snapshot.ts    # Read/write WorkStateSnapshot + sync logging
+│   │   ├── providers/
+│   │   │   ├── types.ts       # TaskProvider interface
+│   │   │   ├── gmail.ts       # Gmail API — thread classification
+│   │   │   ├── calendar.ts    # Google Calendar API — events + free blocks
+│   │   │   └── notion.ts      # Notion API — task binning by due date/status
+│   │   └── sync/
+│   │       ├── syncAll.ts     # Parallel provider fetch → snapshot → SQLite
+│   │       └── scheduler.ts   # node-cron loop + startup sync
+│   ├── package.json
+│   └── tsconfig.json
+├── web/                       # Vite + React dashboard
+│   ├── src/
+│   │   ├── App.tsx
+│   │   └── pages/
+│   ├── package.json
+│   └── vite.config.ts
+├── demo/                      # Mock-data evaluation scripts
+│   ├── data/mock.ts
 │   ├── agents/
-│   │   ├── without.ts        # Agent with raw Gmail/Calendar/Notion tools (multi-turn)
-│   │   └── with.ts           # Agent using OneCallAnthropic harness (single turn, 0 tools)
-│   ├── prompts.ts            # 20 representative productivity prompts
-│   ├── trace.ts              # Single-prompt side-by-side trace
-│   └── benchmark.ts          # 20-prompt metrics table
+│   │   ├── without.ts         # Multi-turn agent with raw tools
+│   │   └── with.ts            # Single-turn agent using OneCallAnthropic
+│   ├── prompts.ts
+│   ├── trace.ts
+│   └── benchmark.ts
+├── live/                      # Live-data evaluation scripts
+├── wiki/                      # Project documentation
 ├── .env.example
-├── package.json
-└── tsconfig.json
+├── .gitignore
+├── package.json               # Workspace root
+├── CLAUDE.md
+└── README.md
 ```
 
 ---

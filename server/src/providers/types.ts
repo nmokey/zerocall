@@ -1,4 +1,4 @@
-import type { Task } from '../types/snapshot.js';
+import type { Task } from '@onecall/harness';
 
 export interface TaskProvider {
   name: 'notion' | 'linear' | 'todoist';

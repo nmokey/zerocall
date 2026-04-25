@@ -1,5 +1,5 @@
 import { getDb } from './client.js';
-import type { WorkStateSnapshot } from '../types/snapshot.js';
+import type { WorkStateSnapshot } from '@onecall/harness';
 
 export function writeSnapshot(snapshot: WorkStateSnapshot): void {
   const db = getDb();

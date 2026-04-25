@@ -1,4 +1,4 @@
-import type { WorkStateSnapshot } from '../../src/types/snapshot.js';
+import type { WorkStateSnapshot } from '@onecall/harness';
 
 export const MOCK_SNAPSHOT: WorkStateSnapshot = {
   as_of: '2026-04-24T09:00:00Z',
