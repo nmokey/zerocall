@@ -36,7 +36,10 @@ export function isAuthenticated(): boolean {
 
 export function getOAuthUrl(): string {
   const client = createOAuthClient();
-  return client.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
+  // prompt: 'consent' forces Google to re-issue a refresh_token even if the
+  // app was previously authorized. Without this, repeat authorizations only
+  // return an access_token and tokens.json loses the ability to auto-refresh.
+  return client.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: SCOPES });
 }
 
 /** Exchanges the auth code from Google's redirect for tokens and persists them. */
@@ -58,8 +61,17 @@ export async function getAuthenticatedClient(): Promise<OAuth2Client> {
     throw new Error('Not authenticated. Complete Google OAuth via the dashboard first.');
   }
 
+  // If the access token is expired, refresh it. A refresh_token must be present
+  // (obtained by completing OAuth with access_type:'offline' + prompt:'consent').
   const expiry = client.credentials.expiry_date;
-  if (expiry && expiry < Date.now()) {
+  const needsRefresh = expiry && expiry < Date.now();
+  if (needsRefresh) {
+    if (!client.credentials.refresh_token) {
+      // No refresh token — delete stale tokens so the next isAuthenticated()
+      // check fails cleanly and the user is prompted to re-authenticate.
+      fs.unlinkSync(TOKENS_PATH);
+      throw new Error('Access token expired and no refresh token available. Re-authenticate via the dashboard.');
+    }
     const { credentials } = await client.refreshAccessToken();
     client.setCredentials(credentials);
     saveTokens(client);
