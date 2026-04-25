@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { initSchema } from './db/schema.js';
 import { createApiServer } from './api/server.js';
 
