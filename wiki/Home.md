@@ -28,7 +28,6 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 | [Database](Database.md) | SQLite schema, snapshot persistence, sync logging |
 | [Background Sync](Background-Sync.md) | `syncAll` orchestration and `node-cron` scheduler |
 | [Authentication](Authentication.md) | Google OAuth2 flow and token management |
-| [MCP Server](MCP-Server.md) | Optional deployment mode for Claude Desktop |
 | [Demo and Benchmarking](Demo-and-Benchmarking.md) | Running demo scripts, evaluation methodology, metrics |
 | [Configuration](Configuration.md) | Environment variables and setup guide |
 | [Extending OneCall](Extending-OneCall.md) | Adding new providers via the `TaskProvider` interface |
@@ -39,7 +38,7 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 - **Run the demo:** `npm run demo:trace`
 - **Run benchmarks:** `npm run demo:benchmark`
-- **Start the MCP server:** `npm start`
+- **Start the server:** `npm start`
 - **Live evaluation (requires credentials):** `npm run live:trace`
 
 ---

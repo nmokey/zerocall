@@ -29,8 +29,8 @@ Productivity agents are stateless by default. Every invocation — *"what should
 **The fix:**
 An agent harness that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
-**The key pivot (from Cognition feedback):**
-The original design was an MCP server exposing `get_work_state()`. A Cognition employee pointed out this still relies on model intelligence to decide to call the tool — it's just a better tool, not a paradigm shift. The new design injects context at the harness level: `OneCallAnthropic` overrides `prepareOptions()` in the Anthropic SDK and splices the snapshot into every `system` prompt automatically. The model never needs to ask for it.
+**The key insight (from Cognition feedback):**
+Traditional approaches expose work context through tools that the model must decide to call — that's just a better tool, not a paradigm shift. OneCall injects context at the harness level: `OneCallAnthropic` overrides `prepareOptions()` in the Anthropic SDK and splices the snapshot into every `system` prompt automatically. The model never needs to ask for it.
 
 ---
 
@@ -46,7 +46,7 @@ OneCall has three layers:
 
 **Layer 3: HTTP API + dashboard** — An Express server exposes a REST API on port 3000. A Vite + React frontend (in `web/`) connects to it. The dashboard handles first-run setup (credential entry + Google OAuth), shows the current snapshot, and lets users trigger a manual sync.
 
-There is no MCP server. State delivery is exclusively through harness injection.
+State delivery is exclusively through harness injection.
 
 ---
 
@@ -390,7 +390,7 @@ npm run demo:benchmark          # all 20 prompts, sequential to avoid rate limit
 - Do not try to support every task manager — Notion is sufficient for the demo; the `TaskProvider` interface signals extensibility
 - Do not implement semantic search or vector embeddings — the snapshot is intentionally structured, not a RAG system
 - Do not add a tool-call flow back to the "with" agent — the entire point is zero tool calls
-- Do not add an MCP server — state delivery is through harness injection only
+- Do not add tool-based context retrieval — state delivery is through harness injection only
 
 ---
 
