@@ -49,7 +49,7 @@ const RAW_TOOLS: Tool[] = [
   },
   {
     name: 'calendar_list_events',
-    description: 'List Google Calendar events in a time range.',
+    description: `List Google Calendar events in a time range. Today's date is ${new Date().toISOString().slice(0, 10)}.`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -62,7 +62,7 @@ const RAW_TOOLS: Tool[] = [
   },
   {
     name: 'notion_query_database',
-    description: 'Query a Notion database with optional filters.',
+    description: `Query the user's Notion task database (ID: ${process.env.NOTION_DATABASE_ID}).`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -101,6 +101,12 @@ export async function runWithoutOneCall(
     return emailState;
   }
 
+  let notionTasks: Awaited<ReturnType<InstanceType<typeof NotionProvider>['getTasks']>> | null = null;
+  async function getNotionTasks() {
+    if (!notionTasks) notionTasks = await new NotionProvider().getTasks();
+    return notionTasks;
+  }
+
   async function handleToolCall(name: string, input: Record<string, unknown>): Promise<unknown> {
     switch (name) {
       case 'gmail_search_threads': {
@@ -130,7 +136,7 @@ export async function runWithoutOneCall(
       }
 
       case 'notion_query_database': {
-        const tasks = await new NotionProvider().getTasks();
+        const tasks = await getNotionTasks();
         return { results: [...tasks.overdue, ...tasks.due_today, ...tasks.in_progress] };
       }
 
