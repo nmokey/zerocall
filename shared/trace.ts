@@ -71,20 +71,28 @@ export async function runTrace(title: string, agents: TraceAgents): Promise<void
     process.exit(1);
   }
 
-  const arg = process.argv[2];
-  const prompt = arg
-    ? (PROMPTS.find(p => p.id === arg) ?? PROMPTS[parseInt(arg, 10) - 1] ?? PROMPTS[0])
-    : PROMPTS[0];
+  // --prompt "custom text" for custom prompts, or preset ID/index
+  const promptFlagIdx = process.argv.indexOf('--prompt');
+  let promptText: string;
+  if (promptFlagIdx !== -1 && process.argv[promptFlagIdx + 1]) {
+    promptText = process.argv[promptFlagIdx + 1];
+  } else {
+    const arg = process.argv[2];
+    const preset = arg
+      ? (PROMPTS.find(p => p.id === arg) ?? PROMPTS[parseInt(arg, 10) - 1] ?? PROMPTS[0])
+      : PROMPTS[0];
+    promptText = preset.text;
+  }
 
   const client = new Anthropic({ apiKey });
 
   printHeader(title, CYAN);
-  console.log(`\n${BOLD}Prompt:${RESET} "${prompt.text}"\n`);
+  console.log(`\n${BOLD}Prompt:${RESET} "${promptText}"\n`);
   console.log(`Running both agents in parallel...`);
 
   const [without, with_] = await Promise.all([
-    agents.runWithoutOneCall(client, prompt.text),
-    agents.runWithOneCall(client, prompt.text),
+    agents.runWithoutOneCall(client, promptText),
+    agents.runWithOneCall(client, promptText),
   ]);
 
   printRun('WITHOUT OneCall  (raw tool calls)', RED, without);
