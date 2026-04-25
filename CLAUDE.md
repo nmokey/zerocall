@@ -241,12 +241,13 @@ Optionally register a second utility tool:
 #### Notion (via Notion API)
 
 **What to fetch:**
-- Query a database ID (set in `.env`) filtered by status
+- Use `client.search({ filter: { value: 'page', property: 'object' } })` — note that `databases.query` was removed in the current `@notionhq/client` version
 - Map status values to `overdue`, `due_today`, `in_progress` based on due date and status property
+- Property extraction is schema-agnostic: iterate all properties and match by `type` (`title`, `date`, `status`, `select`) rather than by name
 
-**TaskProvider implementation:** wrap in the `TaskProvider` interface so it's swappable
+**TaskProvider implementation:** wrap in the `NotionProvider` class implementing `TaskProvider` so it's swappable
 
-**Auth:** Notion integration token (set in `.env`)
+**Auth:** Notion integration token (set in `.env`). The integration must be explicitly connected to the target database via Notion's Connections menu — otherwise the API returns empty results.
 
 ---
 
@@ -311,6 +312,9 @@ Use `google-auth-library`'s `OAuth2Client` with scopes:
 ```bash
 # .env.example
 
+# Anthropic (required for demo scripts)
+ANTHROPIC_API_KEY=
+
 # Google OAuth2
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -337,6 +341,7 @@ GMAIL_TOPIC_NAME=
 ```json
 {
   "dependencies": {
+    "@anthropic-ai/sdk": "latest",
     "@modelcontextprotocol/sdk": "latest",
     "@notionhq/client": "latest",
     "better-sqlite3": "latest",
@@ -355,7 +360,9 @@ GMAIL_TOPIC_NAME=
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "demo:trace": "tsx demo/trace.ts",
+    "demo:benchmark": "tsx demo/benchmark.ts"
   }
 }
 ```
@@ -392,6 +399,35 @@ Implement in this sequence to always have a runnable state:
 7. **MCP Server** — `src/server.ts` + `src/index.ts` — register tool, handle request
 8. **Scheduler** — `src/sync/scheduler.ts` — cron loop + startup sync
 9. **Demo validation** — manually trigger sync, call `get_work_state()`, verify schema matches spec
+
+---
+
+## Demo Directory
+
+`demo/` contains two evaluation scripts that call the Claude API directly using `@anthropic-ai/sdk`:
+
+```
+demo/
+├── data/mock.ts       # Static WorkStateSnapshot + raw provider slices (realistic UCLA research context)
+├── agents/
+│   ├── without.ts     # Agent with raw tools: gmail_search_threads, gmail_get_thread,
+│   │                  #   calendar_list_events, notion_query_database
+│   └── with.ts        # Agent with only get_work_state() (and trigger_sync)
+├── prompts.ts         # 20 representative productivity prompts
+├── trace.ts           # Single-prompt color-coded side-by-side trace
+└── benchmark.ts       # Sequential 20-prompt run → metrics table + summary
+```
+
+**Running the demo:**
+```bash
+npm run demo:trace              # default prompt, real-time color trace
+npm run demo:trace -- p04       # specific prompt by ID
+npm run demo:benchmark          # all 20 prompts, sequential to avoid rate limits
+```
+
+**Current evaluation status:** Both scripts use mocked data from `demo/data/mock.ts` — they measure how many tool calls Claude makes given different tool schemas, not end-to-end correctness against live data. The ideal evaluation (real providers, correctness comparison) is tracked separately.
+
+**Known finding:** The "with" agent can use *more* tokens than "without" because `get_work_state()` returns the entire snapshot in one response, while the "without" agent receives smaller per-call responses. The primary metric advantage is **tool call reduction** and **latency** — lead with those in the demo. Token count is a secondary, sometimes unfavorable, metric.
 
 ---
 
