@@ -7,9 +7,12 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "demo:trace": "tsx demo/trace.ts",
+    "demo:benchmark": "tsx demo/benchmark.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "latest",
     "@modelcontextprotocol/sdk": "latest",
     "@notionhq/client": "latest",
     "better-sqlite3": "latest",
