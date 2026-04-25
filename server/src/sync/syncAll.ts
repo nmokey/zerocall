@@ -4,7 +4,7 @@ import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
 import { NotionProvider } from '../providers/notion.js';
 import { writeSnapshot, logSyncStart, logSyncEnd } from '../db/snapshot.js';
-import type { WorkStateSnapshot } from '../types/snapshot.js';
+import type { WorkStateSnapshot } from '@onecall/harness';
 
 export async function syncAll(): Promise<void> {
   const logId = logSyncStart();

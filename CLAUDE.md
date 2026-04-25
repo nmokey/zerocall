@@ -54,60 +54,68 @@ There is no MCP server. State delivery is exclusively through harness injection.
 
 ```
 onecall/
-├── src/
-│   ├── main.ts               # Entrypoint: initSchema + startScheduler + HTTP server
-│   ├── client.ts             # OneCallAnthropic — SDK subclass with harness injection
-│   ├── api/
-│   │   ├── server.ts         # Express HTTP server — all /api/* routes + /oauth2callback
-│   │   └── config.ts         # Credential validation + .env writing
-│   ├── sync/
-│   │   ├── scheduler.ts      # node-cron polling loop
-│   │   ├── syncAll.ts        # Orchestrates a full sync across all providers
-│   │   └── webhooks.ts       # Optional: Gmail push notification handler
-│   ├── providers/
-│   │   ├── types.ts          # TaskProvider interface + shared types
-│   │   ├── gmail.ts          # Gmail API integration
-│   │   ├── calendar.ts       # Google Calendar API integration
-│   │   └── notion.ts         # Notion API integration
-│   ├── db/
-│   │   ├── client.ts         # better-sqlite3 singleton
-│   │   ├── schema.ts         # Table definitions + migrations
-│   │   └── snapshot.ts       # Read/write WorkStateSnapshot + sync log
-│   ├── auth/
-│   │   └── google.ts         # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
-│   └── types/
-│       └── snapshot.ts       # WorkStateSnapshot TypeScript types
-├── web/                      # Vite + React frontend
+├── harness/                   # @onecall/harness — SDK subclass + shared types
+│   ├── src/
+│   │   ├── index.ts           # Package entry point (re-exports)
+│   │   ├── client.ts          # OneCallAnthropic — prepareOptions injection
+│   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
+│   ├── package.json
+│   └── tsconfig.json
+├── server/                    # Background sync server + Express API
+│   ├── src/
+│   │   ├── main.ts            # Entrypoint: initSchema + startScheduler + HTTP server
+│   │   ├── api/
+│   │   │   ├── server.ts      # Express HTTP server — all /api/* routes + /oauth2callback
+│   │   │   └── config.ts      # Credential validation + .env writing
+│   │   ├── sync/
+│   │   │   ├── scheduler.ts   # node-cron polling loop
+│   │   │   ├── syncAll.ts     # Orchestrates a full sync across all providers
+│   │   │   └── webhooks.ts    # Optional: Gmail push notification handler
+│   │   ├── providers/
+│   │   │   ├── types.ts       # TaskProvider interface
+│   │   │   ├── gmail.ts       # Gmail API integration
+│   │   │   ├── calendar.ts    # Google Calendar API integration
+│   │   │   └── notion.ts      # Notion API integration
+│   │   ├── db/
+│   │   │   ├── client.ts      # better-sqlite3 singleton
+│   │   │   ├── schema.ts      # Table definitions + migrations
+│   │   │   └── snapshot.ts    # Read/write WorkStateSnapshot + sync log
+│   │   └── auth/
+│   │       └── google.ts      # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
+│   ├── package.json
+│   └── tsconfig.json
+├── web/                       # Vite + React frontend
 │   ├── src/
 │   │   ├── main.tsx
-│   │   ├── App.tsx           # Checks /api/status → routes to Setup or Dashboard
-│   │   ├── api.ts            # Typed fetch wrappers for all /api/* endpoints
+│   │   ├── App.tsx            # Checks /api/status → routes to Setup or Dashboard
+│   │   ├── api.ts             # Typed fetch wrappers for all /api/* endpoints
 │   │   └── pages/
-│   │       ├── Setup.tsx     # Two-step: credential form → Google OAuth
-│   │       └── Dashboard.tsx # Snapshot view + sync status + Sync Now button
-│   ├── vite.config.ts        # Dev proxy: /api/* and /oauth2callback → localhost:3000
+│   │       ├── Setup.tsx      # Two-step: credential form → Google OAuth
+│   │       └── Dashboard.tsx  # Snapshot view + sync status + Sync Now button
+│   ├── vite.config.ts         # Dev proxy: /api/* and /oauth2callback → localhost:3000
 │   ├── index.html
 │   ├── package.json
 │   └── tsconfig.json
 ├── demo/
-│   ├── data/mock.ts          # Static WorkStateSnapshot + raw provider slices
+│   ├── data/mock.ts           # Static WorkStateSnapshot + raw provider slices
 │   ├── agents/
-│   │   ├── without.ts        # Multi-turn agent with raw Gmail/Calendar/Notion tools
-│   │   └── with.ts           # Single-turn agent using OneCallAnthropic (0 tools)
-│   ├── prompts.ts            # 20 representative productivity prompts
-│   ├── trace.ts              # Single-prompt color-coded side-by-side trace
-│   └── benchmark.ts          # Sequential 20-prompt run → metrics table + summary
+│   │   ├── without.ts         # Multi-turn agent with raw Gmail/Calendar/Notion tools
+│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (0 tools)
+│   ├── prompts.ts             # 20 representative productivity prompts
+│   ├── trace.ts               # Single-prompt color-coded side-by-side trace
+│   └── benchmark.ts           # Sequential 20-prompt run → metrics table + summary
+├── live/                      # Live-data evaluation scripts
+├── wiki/                      # Project documentation
 ├── .env.example
 ├── .gitignore
-├── package.json
-├── tsconfig.json
+├── package.json               # Workspace root
 ├── README.md
-└── CLAUDE.md                 # this file
+└── CLAUDE.md                  # this file
 ```
 
 ---
 
-### The Harness: `src/client.ts`
+### The Harness: `harness/src/client.ts`
 
 The centrepiece of the project. `OneCallAnthropic` extends the Anthropic SDK client:
 
@@ -127,7 +135,7 @@ export class OneCallAnthropic extends Anthropic {
 
 The `snapshotGetter` parameter is injected at construction time:
 - **Demo/test:** `snapshotGetter: () => MOCK_SNAPSHOT`
-- **Production:** `snapshotGetter: readLatestSnapshot` (from `src/db/snapshot.ts`)
+- **Production:** `snapshotGetter: readLatestSnapshot` (from `server/src/db/snapshot.ts`)
 
 `formatSnapshot()` renders the `WorkStateSnapshot` as structured plain text — more token-efficient than JSON and readable in demo terminal output.
 
@@ -186,7 +194,7 @@ For the hackathon, Notion is implemented. The interface ensures Linear and Todoi
 
 ---
 
-### HTTP API (`src/api/server.ts`)
+### HTTP API (`server/src/api/server.ts`)
 
 The Express server runs on port 3000. In production it also serves `web/dist/` as static files. During development, Vite proxies `/api/*` and `/oauth2callback` to port 3000.
 
@@ -302,39 +310,26 @@ PORT=3000
 
 ---
 
-### package.json Dependencies
+### package.json Layout
+
+The project uses **npm workspaces** with three packages (`harness`, `server`, `web`). The root `package.json` is the workspace root and provides orchestration scripts:
 
 ```json
 {
-  "dependencies": {
-    "@anthropic-ai/sdk": "latest",
-    "@notionhq/client": "latest",
-    "better-sqlite3": "latest",
-    "cors": "latest",
-    "dotenv": "latest",
-    "express": "latest",
-    "google-auth-library": "latest",
-    "googleapis": "latest",
-    "node-cron": "latest"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "latest",
-    "@types/cors": "latest",
-    "@types/express": "latest",
-    "@types/node": "latest",
-    "@types/node-cron": "latest",
-    "typescript": "latest",
-    "tsx": "latest"
-  },
+  "workspaces": ["harness", "server", "web"],
   "scripts": {
-    "build": "tsc && cd web && npm run build",
-    "start": "node dist/main.js",
-    "dev": "tsx watch src/main.ts",
+    "build": "npm run build -w harness && npm run build -w server && npm run build -w web",
+    "start": "npm start -w server",
+    "dev": "npm run dev -w server",
     "demo:trace": "tsx demo/trace.ts",
-    "demo:benchmark": "tsx demo/benchmark.ts"
+    "demo:benchmark": "tsx demo/benchmark.ts",
+    "live:trace": "tsx live/trace.ts",
+    "live:benchmark": "tsx live/benchmark.ts"
   }
 }
 ```
+
+Server dependencies (`server/package.json`) include Express, SQLite, Google APIs, Notion, and `@onecall/harness`.
 
 ---
 

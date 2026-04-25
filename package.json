@@ -1,39 +1,22 @@
 {
   "name": "onecall",
-  "version": "1.0.0",
-  "description": "A read-once cache for your work life — one tool call instead of ten.",
-  "type": "module",
-  "main": "dist/main.js",
+  "private": true,
+  "description": "Your AI assistant reads the room before you ask.",
+  "workspaces": ["harness", "server", "web"],
   "scripts": {
-    "build": "tsc && cd web && npm run build",
-    "build:src": "tsc",
-    "build:web": "cd web && npm run build",
-    "start": "node dist/main.js",
-    "dev": "tsx watch src/main.ts",
+    "build": "npm run build -w harness && npm run build -w server && npm run build -w web",
+    "build:harness": "npm run build -w harness",
+    "build:server": "npm run build -w server",
+    "build:web": "npm run build -w web",
+    "start": "npm start -w server",
+    "dev": "npm run dev -w server",
     "demo:trace": "tsx demo/trace.ts",
     "demo:benchmark": "tsx demo/benchmark.ts",
     "live:trace": "tsx live/trace.ts",
     "live:benchmark": "tsx live/benchmark.ts"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "latest",
-    "@notionhq/client": "latest",
-    "@onecall/harness": "file:harness",
-    "better-sqlite3": "latest",
-    "cors": "^2.8.6",
-    "dotenv": "latest",
-    "express": "^5.2.1",
-    "google-auth-library": "latest",
-    "googleapis": "latest",
-    "node-cron": "latest"
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "latest",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "latest",
-    "@types/node-cron": "latest",
-    "tsx": "latest",
-    "typescript": "latest"
+    "dotenv": "latest",
+    "tsx": "latest"
   }
 }

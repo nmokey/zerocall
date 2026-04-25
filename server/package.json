@@ -1,0 +1,33 @@
+{
+  "name": "@onecall/server",
+  "version": "1.0.0",
+  "description": "OneCall background sync server, Express API, and provider integrations.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@notionhq/client": "latest",
+    "@onecall/harness": "*",
+    "better-sqlite3": "latest",
+    "cors": "^2.8.6",
+    "dotenv": "latest",
+    "express": "^5.2.1",
+    "google-auth-library": "latest",
+    "googleapis": "latest",
+    "node-cron": "latest"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "latest",
+    "@types/node-cron": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

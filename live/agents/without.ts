@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
-import { getAuthenticatedClient } from '../../src/auth/google.js';
-import { fetchEmailState } from '../../src/providers/gmail.js';
-import { fetchCalendarState } from '../../src/providers/calendar.js';
-import { NotionProvider } from '../../src/providers/notion.js';
+import { getAuthenticatedClient } from '../../server/src/auth/google.js';
+import { fetchEmailState } from '../../server/src/providers/gmail.js';
+import { fetchCalendarState } from '../../server/src/providers/calendar.js';
+import { NotionProvider } from '../../server/src/providers/notion.js';
 
 export interface AgentRun {
   toolCalls: ToolCallRecord[];

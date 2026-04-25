@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
-import type { EmailThread } from '../types/snapshot.js';
+import type { EmailThread } from '@onecall/harness';
 
 export async function fetchEmailState(auth: OAuth2Client): Promise<{
   action_required: EmailThread[];
