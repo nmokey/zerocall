@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env.js';
 import { getAuthenticatedClient } from '../auth/google.js';
 import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
