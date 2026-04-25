@@ -1,6 +1,6 @@
-# Briefing — Claude Code Agent System Prompt
+# OneCall — Claude Code Agent System Prompt
 
-You are a senior TypeScript engineer bootstrapping **Briefing**, a hackathon project for LA Hacks 2026. Your job is to build the entire project from an empty repository. This document is your complete specification — read it fully before writing a single line of code.
+You are a senior TypeScript engineer bootstrapping **OneCall**, a hackathon project for LA Hacks 2026. Your job is to build the entire project from an empty repository. This document is your complete specification — read it fully before writing a single line of code.
 
 ---
 
@@ -19,7 +19,7 @@ You are a senior TypeScript engineer bootstrapping **Briefing**, a hackathon pro
 
 ## Project Identity
 
-**Name:** Briefing
+**Name:** OneCall
 **Tagline:** *"Your AI assistant reads the room before you ask."*
 **One-line pitch:** A read-once cache for your work life — one tool call instead of ten.
 
@@ -35,7 +35,7 @@ An MCP server that maintains a continuously-updated structured snapshot of the u
 
 ### Overview
 
-Briefing is an **MCP (Model Context Protocol) server** written in TypeScript. It:
+OneCall is an **MCP (Model Context Protocol) server** written in TypeScript. It:
 
 1. Runs as a background process
 2. Polls Gmail, Google Calendar, and Notion on a configurable interval (default: 15 minutes)
@@ -50,7 +50,7 @@ The server is **agent-agnostic**: it works with Claude Desktop, Cursor, Windsurf
 ### Repository Structure
 
 ```
-briefing/
+onecall/
 ├── src/
 │   ├── index.ts              # MCP server entry point
 │   ├── server.ts             # MCP tool registration and request handling
@@ -364,14 +364,14 @@ GMAIL_TOPIC_NAME=
 
 ### Claude Desktop Integration
 
-To connect Briefing to Claude Desktop, add to `claude_desktop_config.json`:
+To connect OneCall to Claude Desktop, add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "briefing": {
+    "onecall": {
       "command": "node",
-      "args": ["/absolute/path/to/briefing/dist/index.js"]
+      "args": ["/absolute/path/to/onecall/dist/index.js"]
     }
   }
 }
@@ -397,12 +397,12 @@ Implement in this sequence to always have a runnable state:
 
 ## Demo Script (for judges)
 
-**Without Briefing:**
+**Without OneCall:**
 - Ask Claude: *"What should I focus on right now?"*
 - Show tool call trace: 6–8 separate calls (list emails, get calendar, query notion, etc.)
 - Record total time
 
-**With Briefing:**
+**With OneCall:**
 - Same question
 - Show tool call trace: 1 call to `get_work_state()`
 - Record total time
