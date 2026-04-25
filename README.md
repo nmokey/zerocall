@@ -170,6 +170,7 @@ Runs one prompt through both agents in parallel and prints a color-coded trace.
 npm run demo:trace              # default: "What are my action items from Arvind's lab?"
 npm run demo:trace -- p04       # by prompt ID
 npm run demo:trace -- 7         # by number (1–20)
+npm run demo:trace -- --prompt "Can I squeeze in a workout today?"  # custom prompt
 ```
 
 Sample output:
@@ -224,6 +225,37 @@ To wire the "with" agent to your real snapshot today, update the `snapshotGetter
 
 ---
 
+## Live Evaluation
+
+The `live/` directory contains the same trace and benchmark scripts, but running against your **real** Gmail, Google Calendar, and Notion data instead of mocked fixtures.
+
+### Prerequisites
+
+1. Fill in `.env` with your `ANTHROPIC_API_KEY`, Google OAuth credentials, and Notion token (see [Configure credentials](#2-configure-credentials) above).
+2. Run `npm start` at least once so the background sync populates the SQLite snapshot.
+
+The `without` agent makes live API calls on every run. The `with` agent reads from the local snapshot (sub-millisecond).
+
+### `npm run live:trace` — live side-by-side trace
+
+```bash
+npm run live:trace                   # default prompt
+npm run live:trace -- p04             # by prompt ID
+npm run live:trace -- 7               # by number (1–20)
+npm run live:trace -- --prompt "What meetings can I skip today?"  # custom prompt
+```
+
+### `npm run live:benchmark` — live 20-prompt metrics
+
+```bash
+npm run live:benchmark               # all 20 preset prompts
+npm run live:benchmark -- --prompt "Should I reschedule my 1:1?"  # single custom prompt
+```
+
+> See [`live/README.md`](live/README.md) for full setup details, sample output, and error troubleshooting.
+
+---
+
 ## Repository Structure
 
 ```
@@ -263,15 +295,26 @@ onecall/
 │   │   └── pages/
 │   ├── package.json
 │   └── vite.config.ts
+├── shared/                    # Shared trace, benchmark, and prompt logic
+│   ├── trace.ts               # Color-coded side-by-side trace runner
+│   ├── benchmark.ts           # 20-prompt metrics table runner
+│   ├── prompts.ts             # 20 representative productivity prompts
+│   ├── agentLoop.ts           # Generic agentic loop for "without" agents
+│   ├── runWith.ts             # Generic "with" agent runner
+│   └── types.ts               # AgentRun + ToolCallRecord types
 ├── demo/                      # Mock-data evaluation scripts
 │   ├── data/mock.ts
 │   ├── agents/
-│   │   ├── without.ts         # Multi-turn agent with raw tools
-│   │   └── with.ts            # Single-turn agent using OneCallAnthropic
-│   ├── prompts.ts
+│   │   ├── without.ts         # Multi-turn agent with raw tools (mock data)
+│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock)
 │   ├── trace.ts
 │   └── benchmark.ts
 ├── live/                      # Live-data evaluation scripts
+│   ├── agents/
+│   │   ├── without.ts         # Multi-turn agent with real API calls
+│   │   └── with.ts            # Single-turn agent reading live SQLite snapshot
+│   ├── trace.ts
+│   └── benchmark.ts
 ├── wiki/                      # Project documentation
 ├── .env.example
 ├── .gitignore
