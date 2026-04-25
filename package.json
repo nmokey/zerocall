@@ -1,0 +1,28 @@
+{
+  "name": "onecall",
+  "version": "1.0.0",
+  "description": "A read-once cache for your work life — one tool call instead of ten.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "@notionhq/client": "latest",
+    "better-sqlite3": "latest",
+    "dotenv": "latest",
+    "google-auth-library": "latest",
+    "googleapis": "latest",
+    "node-cron": "latest"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/node": "latest",
+    "@types/node-cron": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
