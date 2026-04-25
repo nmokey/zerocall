@@ -16,7 +16,7 @@ Work state doesn't change that fast, but agents act like it does.
 
 OneCall is an **agent harness** that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt — before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
-**Before OneCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query
+**Before OneCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query  
 **After OneCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
 
 The key insight: we didn't give Claude a better tool. We changed what Claude knows before it starts thinking.
@@ -25,11 +25,11 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 ## How It Works
 
-### Background sync loop
+### Layer 1: Background sync
 
-OneCall runs a background sync every 15 minutes (configurable), polling Gmail, Google Calendar, and Notion in parallel. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database.
+OneCall runs a background sync every 15 minutes (configurable), polling Gmail, Google Calendar, and Notion in parallel using their REST APIs directly — no LLM involved. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database.
 
-### Harness-level injection
+### Layer 2: Harness-level injection
 
 `OneCallAnthropic` subclasses the Anthropic SDK client and overrides `prepareOptions()` — a lifecycle hook that fires before every request is sent. On every `messages.create()` call, it reads the latest snapshot from SQLite (sub-millisecond) and splices it into the `system` prompt as a compact plain-text block. The calling code passes no tools and no system prompt; injection is invisible.
 
@@ -49,48 +49,51 @@ const response = await client.messages.create({
 });
 ```
 
+### Layer 3: Setup page
+
+The server serves a lightweight HTML setup page at `http://localhost:3000/setup`. It handles credential entry (Google OAuth, Notion token, optional Anthropic key) and shows sync status. No separate frontend build needed.
+
 ---
 
 ## Quickstart
 
-### 1. Install dependencies
+### 1. Install and build
 
 ```bash
 npm install
-```
-
-### 2. Configure credentials
-
-```bash
-cp .env.example .env
-```
-
-Fill in `.env`:
-
-
-| Variable                                    | Where to get it                                                                                                                                                                                                                                                                                     |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`                         | [console.anthropic.com](https://console.anthropic.com) → API Keys                                                                                                                                                                                                                                   |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application, redirect URI: `http://localhost:3000/oauth2callback`). Enable Gmail API and Google Calendar API. Add your email as a test user on the OAuth consent screen. |
-| `NOTION_TOKEN`                              | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret                                                                                                                                                                        |
-| `NOTION_DATABASE_ID`                        | 32-char hex ID from your Notion task database URL                                                                                                                                                                                                                                                   |
-
-
-### 3. Build
-
-```bash
 npm run build
 ```
 
-### 4. Run (first time)
+### 2. Start the server
 
 ```bash
 npm start
 ```
 
-On first run, OneCall prints a Google OAuth URL. Open it in your browser, grant access to Gmail and Calendar (read-only), and tokens are saved to `tokens.json` automatically. Every subsequent run loads and refreshes them silently.
+### 3. Configure credentials
 
-Once authenticated, the first sync runs immediately:
+Open `http://localhost:3000/setup` in your browser. Enter credentials section by section — each saves independently so you don't lose progress.
+
+| Credential | Where to get it |
+|---|---|
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application). Set redirect URI to `http://localhost:3000/oauth2callback`. Enable Gmail API and Google Calendar API. Add your email as a test user under OAuth consent screen → Test users. |
+| `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret. Share your task database with the integration via the database's Connections menu. |
+| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`) |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys. Only needed for the demo/live benchmark scripts. |
+
+### 4. Connect Google
+
+On the setup page, click **Connect Google Account** after saving your Google credentials. This opens the OAuth consent screen. After approving, you're redirected back and tokens are saved to `server/tokens.json`.
+
+If the browser-based OAuth flow doesn't work, use the CLI alternative:
+
+```bash
+npm run auth:google
+```
+
+This prints a consent URL, you open it, paste the `code` from the redirect URL back into the terminal, and tokens are written directly.
+
+Once connected, the first sync runs immediately:
 
 ```
 [scheduler] polling every 15 minutes
@@ -99,9 +102,19 @@ Once authenticated, the first sync runs immediately:
 
 ---
 
+## Development
+
+Run the server in watch mode (auto-recompiles on save):
+
+```bash
+npm run dev
+```
+
+---
+
 ## Injected Context Format
 
-The snapshot is rendered as a compact plain-text block (not raw JSON) before injection, so it reads cleanly and uses fewer tokens:
+The snapshot is rendered as a compact plain-text block (not raw JSON) before injection:
 
 ```
 --- ONECALL WORK CONTEXT (as of 2026-04-24T09:00:00Z) ---
@@ -156,32 +169,25 @@ The `TaskProvider` interface makes Linear and Todoist drop-in additions.
 
 ## Demo & Evaluation
 
-The `demo/` directory contains two scripts for showing the before/after story.
-
-### Setup
-
-Make sure `ANTHROPIC_API_KEY` is set in `.env`. Both scripts call the Claude API directly using mocked provider data.
-
-### `npm run demo:trace` — side-by-side trace
-
-Runs one prompt through both agents in parallel and prints a color-coded trace.
+The `demo/` directory contains evaluation scripts that use **mocked provider data** — no credentials needed, just `ANTHROPIC_API_KEY`.
 
 ```bash
-npm run demo:trace              # default: "What are my action items from Arvind's lab?"
-npm run demo:trace -- p04       # by prompt ID
-npm run demo:trace -- 7         # by number (1–20)
-npm run demo:trace -- --prompt "Can I squeeze in a workout today?"  # custom prompt
+npm run demo:trace                                       # default prompt
+npm run demo:trace -- p04                                # by prompt ID
+npm run demo:trace -- 7                                  # by number (1–20)
+npm run demo:trace -- --prompt "Am I free at 3pm?"       # custom prompt
+npm run demo:benchmark                                   # all 20 prompts
 ```
 
-Sample output:
+Sample trace output:
 
 ```
 WITHOUT OneCall  (raw tool calls)
-  1. gmail_search_threads  {"query":"Arvind lab action items"}   1ms
-  2. calendar_list_events  {"time_min":"...","time_max":"..."}   0ms
-  3. gmail_search_threads  {"query":"Arvind lab meeting notes"}  0ms
-  4. gmail_get_thread  {"thread_id":"th_001"}                    0ms
-  5. gmail_get_thread  {"thread_id":"th_002"}                    0ms
+  1. gmail_search_threads  1ms
+  2. calendar_list_events  0ms
+  3. gmail_get_thread       0ms
+  4. gmail_get_thread       0ms
+  5. notion_query_database  0ms
 
   Total: 19424ms   Tokens: 7152   Tool calls: 5   LLM turns: 3
 
@@ -191,68 +197,55 @@ WITH OneCall  (harness injection)
 
   Total: 6318ms   Tokens: 872   Tool calls: 0   LLM turns: 1
 
-─── Result ───────────────────────────────────────────
   Tool calls:  5 → 0  (100% fewer)
   LLM turns:   3 → 1  (67% fewer)
   Latency:     19424ms → 6318ms  (67% faster)
   Tokens:      7152 → 872  (88% fewer)
 ```
 
-### `npm run demo:benchmark` — 20-prompt metrics table
-
-Runs all 20 prompts and prints a comparison table plus aggregate summary including tool call reduction, LLM turn reduction, latency, and token counts.
-
-```bash
-npm run demo:benchmark
-```
-
-> **Note:** The benchmark runs prompts sequentially to avoid Anthropic API rate limits.
-
----
-
-## Current Evaluation Limitations
-
-Both demo scripts use **mocked provider data** (`demo/data/mock.ts`) for both agents. This measures *tool call structure and LLM turn count* given different agent configurations, not end-to-end correctness against live data.
-
-**The ideal evaluation** (not yet implemented) would:
-
-1. Have `syncAll()` run against real providers to populate SQLite
-2. Have the "without" agent call the real Gmail/Calendar/Notion APIs live
-3. Have the "with" agent read from `readLatestSnapshot()` — the same data the background sync produced
-4. Compare both agents' answers for correctness, not just tool call count
-
-To wire the "with" agent to your real snapshot today, update the `snapshotGetter` in `demo/agents/with.ts` to call `readLatestSnapshot` from `server/src/db/snapshot.ts` instead of returning `MOCK_SNAPSHOT`.
+**On token reduction:** the background sync calls Google and Notion REST APIs directly — no LLM, no tokens. Token savings are real: each user query drops from ~7,000 tokens across multiple LLM turns to ~870 tokens in a single turn.
 
 ---
 
 ## Live Evaluation
 
-The `live/` directory contains the same trace and benchmark scripts, but running against your **real** Gmail, Google Calendar, and Notion data instead of mocked fixtures.
+The `live/` directory runs the same trace and benchmark against your **real** Gmail, Google Calendar, and Notion data.
 
-### Prerequisites
-
-1. Fill in `.env` with your `ANTHROPIC_API_KEY`, Google OAuth credentials, and Notion token (see [Configure credentials](#2-configure-credentials) above).
-2. Run `npm start` at least once so the background sync populates the SQLite snapshot.
-
-The `without` agent makes live API calls on every run. The `with` agent reads from the local snapshot (sub-millisecond).
-
-### `npm run live:trace` — live side-by-side trace
+**Prerequisites:** credentials configured, `npm start` run at least once so the SQLite snapshot is populated.
 
 ```bash
-npm run live:trace                   # default prompt
-npm run live:trace -- p04             # by prompt ID
-npm run live:trace -- 7               # by number (1–20)
-npm run live:trace -- --prompt "What meetings can I skip today?"  # custom prompt
+npm run live:trace -- --prompt "What should I focus on today?"
+npm run live:benchmark
 ```
 
-### `npm run live:benchmark` — live 20-prompt metrics
+The `without` agent makes live API calls on each run. The `with` agent reads from the local snapshot (sub-millisecond).
 
-```bash
-npm run live:benchmark               # all 20 preset prompts
-npm run live:benchmark -- --prompt "Should I reschedule my 1:1?"  # single custom prompt
-```
+---
 
-> See [`live/README.md`](live/README.md) for full setup details, sample output, and error troubleshooting.
+## npm Scripts Reference
+
+| Command | What it does |
+|---|---|
+| `npm install` | Install all deps + link workspace packages |
+| `npm run build` | Compile harness + server |
+| `npm run build:harness` | Compile harness only |
+| `npm run build:server` | Compile server only |
+| `npm start` | Run the server (`http://localhost:3000`) |
+| `npm run dev` | Server in watch/reload mode |
+| `npm run auth:google` | CLI OAuth flow — writes `server/tokens.json` |
+| `npm run demo:trace` | Mock-data side-by-side trace |
+| `npm run demo:benchmark` | Mock-data 20-prompt benchmark |
+| `npm run live:trace` | Live-data side-by-side trace |
+| `npm run live:benchmark` | Live-data 20-prompt benchmark |
+
+**When to rebuild:**
+
+| Situation | Command |
+|---|---|
+| First clone | `npm run build` |
+| Changed `harness/src/` | `npm run build:harness` (demo/live scripts do this automatically) |
+| Changed `server/src/` | `npm run build:server`, then `npm start` |
+| Changed both | `npm run build` |
 
 ---
 
@@ -260,23 +253,23 @@ npm run live:benchmark -- --prompt "Should I reschedule my 1:1?"  # single custo
 
 ```
 onecall/
-├── harness/                   # @onecall/harness — SDK subclass + shared types
-│   ├── src/
-│   │   ├── index.ts           # Package entry point (re-exports)
-│   │   ├── client.ts          # OneCallAnthropic — prepareOptions injection
-│   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
-│   ├── package.json
-│   └── tsconfig.json
-├── server/                    # Background sync server + Express API
+├── harness/                   # @onecall/harness — npm workspace package
+│   └── src/
+│       ├── client.ts          # OneCallAnthropic — prepareOptions injection
+│       ├── types.ts           # WorkStateSnapshot and all sub-interfaces
+│       └── index.ts           # Package entry point (re-exports)
+├── server/                    # Background sync + Express API — npm workspace package
 │   ├── src/
 │   │   ├── main.ts            # Entry point — DB init, scheduler, HTTP server
+│   │   ├── env.ts             # Loads .env relative to server root
 │   │   ├── api/
-│   │   │   ├── server.ts      # Express routes (/api/*, /oauth2callback)
-│   │   │   └── config.ts      # Credential validation + .env writing
+│   │   │   ├── server.ts      # Express routes (/setup, /api/*, /oauth2callback)
+│   │   │   ├── config.ts      # Credential validation + .env writing
+│   │   │   └── setup.ts       # Server-rendered HTML setup page + POST handler
 │   │   ├── auth/
 │   │   │   └── google.ts      # OAuth2 flow, token persistence, auto-refresh
 │   │   ├── db/
-│   │   │   ├── client.ts      # better-sqlite3 singleton (WAL mode)
+│   │   │   ├── client.ts      # better-sqlite3 singleton
 │   │   │   ├── schema.ts      # Table creation on startup
 │   │   │   └── snapshot.ts    # Read/write WorkStateSnapshot + sync logging
 │   │   ├── providers/
@@ -287,40 +280,33 @@ onecall/
 │   │   └── sync/
 │   │       ├── syncAll.ts     # Parallel provider fetch → snapshot → SQLite
 │   │       └── scheduler.ts   # node-cron loop + startup sync
-│   ├── package.json
-│   └── tsconfig.json
-├── web/                       # Vite + React dashboard
-│   ├── src/
-│   │   ├── App.tsx
-│   │   └── pages/
-│   ├── package.json
-│   └── vite.config.ts
-├── shared/                    # Shared trace, benchmark, and prompt logic
+│   └── tokens.json            # Google OAuth tokens (gitignored, written by auth flow)
+├── shared/                    # Shared logic used by demo/ and live/
 │   ├── trace.ts               # Color-coded side-by-side trace runner
 │   ├── benchmark.ts           # 20-prompt metrics table runner
+│   ├── agentLoop.ts           # Generic agentic loop (without-agent)
+│   ├── runWith.ts             # Generic with-agent runner (uses OneCallAnthropic)
 │   ├── prompts.ts             # 20 representative productivity prompts
-│   ├── agentLoop.ts           # Generic agentic loop for "without" agents
-│   ├── runWith.ts             # Generic "with" agent runner
 │   └── types.ts               # AgentRun + ToolCallRecord types
-├── demo/                      # Mock-data evaluation scripts
-│   ├── data/mock.ts
+├── demo/                      # Mock-data evaluation (no credentials needed)
+│   ├── data/mock.ts           # Realistic static WorkStateSnapshot + raw slices
 │   ├── agents/
-│   │   ├── without.ts         # Multi-turn agent with raw tools (mock data)
-│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock)
-│   ├── trace.ts
-│   └── benchmark.ts
-├── live/                      # Live-data evaluation scripts
+│   │   ├── without.ts         # Multi-turn agent with raw tools (mock responses)
+│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock snapshot)
+│   ├── trace.ts               # Thin wrapper → shared/trace.ts
+│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
+├── live/                      # Live-data evaluation (requires server + credentials)
 │   ├── agents/
 │   │   ├── without.ts         # Multi-turn agent with real API calls
 │   │   └── with.ts            # Single-turn agent reading live SQLite snapshot
-│   ├── trace.ts
-│   └── benchmark.ts
-├── wiki/                      # Project documentation
+│   ├── trace.ts               # Thin wrapper → shared/trace.ts
+│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
+├── scripts/
+│   └── google-auth.ts         # CLI OAuth flow for terminal-only environments
+├── .env                       # Credentials (gitignored)
 ├── .env.example
-├── .gitignore
-├── package.json               # Workspace root
-├── CLAUDE.md
-└── README.md
+├── package.json               # Workspace root — orchestration scripts only
+└── CLAUDE.md
 ```
 
 ---
