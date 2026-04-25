@@ -1,19 +1,31 @@
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { readLatestSnapshot, readLastSyncLog } from '../db/snapshot.js';
 import { syncAll } from '../sync/syncAll.js';
-import { getOAuthUrl, exchangeCodeForTokens, isAuthenticated } from '../auth/google.js';
+import { exchangeCodeForTokens, isAuthenticated, getOAuthUrl } from '../auth/google.js';
 import { getConfigStatus, validateConfig, writeConfig, getIntegrationPreferences, IntegrationPreferences } from './config.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WEB_DIST = path.resolve(__dirname, '../../../web/dist');
+import { renderSetupPage, handleSetupPost } from './setup.js';
 
 export function createApiServer(): express.Express {
   const app = express();
   app.use(cors());
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+
+  // Setup / status page — human-facing UI for credential management
+  app.get('/setup', (req, res) => {
+    const saved = typeof req.query.saved === 'string' ? req.query.saved : null;
+    res.send(renderSetupPage([], saved));
+  });
+
+  app.post('/setup', (req, res) => {
+    const result = handleSetupPost(req.body as Record<string, string>);
+    if (result.ok) {
+      res.redirect(result.redirect);
+    } else {
+      res.status(400).send(renderSetupPage(result.errors));
+    }
+  });
 
   app.get('/api/status', (_req, res) => {
     const config = getConfigStatus();
@@ -71,18 +83,14 @@ export function createApiServer(): express.Express {
     }
     try {
       await exchangeCodeForTokens(code);
-      res.redirect('/');
+      res.redirect('/setup?saved=Google+account+connected.');
     } catch (err: any) {
       res.status(500).send(`OAuth failed: ${err.message}`);
     }
   });
 
-  // Serve frontend static files in production
-  app.use(express.static(WEB_DIST));
-
-  // Catch-all for SPA routing
-  app.use((_req, res) => {
-    res.sendFile(path.join(WEB_DIST, 'index.html'));
+  app.get('/', (_req, res) => {
+    res.redirect('/setup');
   });
 
   return app;
