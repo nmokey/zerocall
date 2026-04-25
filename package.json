@@ -18,6 +18,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
     "@notionhq/client": "latest",
+    "@onecall/harness": "file:harness",
     "better-sqlite3": "latest",
     "cors": "^2.8.6",
     "dotenv": "latest",

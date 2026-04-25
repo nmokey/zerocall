@@ -1,0 +1,1 @@
+{ "name": "@onecall/harness", "version": "1.0.0", "type": "module", "main": "dist/client.js", "scripts": { "build": "tsc" }, "dependencies": { "@anthropic-ai/sdk": "latest" }, "devDependencies": { "typescript": "latest" } } 

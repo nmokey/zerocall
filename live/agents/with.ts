@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
-import { OneCallAnthropic } from '../../src/client.js';
+import { OneCallAnthropic } from '@onecall/harness';
 import { readLatestSnapshot } from '../../src/db/snapshot.js';
 import type { AgentRun } from '../../demo/agents/without.js';
 

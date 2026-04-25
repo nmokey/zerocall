@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { WorkStateSnapshot } from './types/snapshot.js';
+import type { WorkStateSnapshot } from './types.js';
 
 /**
  * OneCallAnthropic subclasses the Anthropic SDK client and overrides the
