@@ -25,6 +25,8 @@ function rpad(s: string, n: number) {
   return s.padStart(n);
 }
 
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 async function main() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -59,6 +61,10 @@ async function main() {
     });
 
     process.stdout.write(` done\n`);
+
+    if (prompt !== PROMPTS[PROMPTS.length - 1]) {
+      await sleep(15000);
+    }
   }
 
   // Aggregate
