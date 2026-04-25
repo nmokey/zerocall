@@ -417,3 +417,13 @@ Run 20 representative productivity queries. Report aggregate tool call reduction
 - Do not implement write operations (creating tasks, sending emails) — read-only scope keeps auth simple and demo safe
 - Do not try to support every task manager — Notion is sufficient for the demo; the `TaskProvider` interface signals extensibility without requiring it
 - Do not implement semantic search or vector embeddings — the snapshot is intentionally structured JSON, not a RAG system
+
+### Coding
+It is critical that your changes will not pile up overtime and make the codebase "slop" and completely unreadable and unmanageable. So before you make any changes, first take a step back and think. Is your current approach the cleanest, minimally invasive way to implement the change? Does it elegantly fit into the existing code structure and style? If not, can you refactor the codebase to accommodate your change in a clean way, but first tell me about your proposed refactor and get my approval before you start refactoring.
+
+When writing code, ensure to follow existing code style and conventions used in the codebase. This includes:
+- Using clear and descriptive variable and function names
+- Writing modular code with functions/classes that have a single responsibility
+- Adding docstrings to all functions and classes that explain their purpose, arguments, return values, and any important notes
+- Adding comments to explain non-obvious implementation details or decisions
+- Specifying tensor sizes in comments where relevant for clarity
