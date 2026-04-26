@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord } from '../api';
-import { getStatus, getAdaptiveStats, applyAdaptiveSection } from '../api';
+import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
+import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import type { Theme } from '../theme';
 
 // ─── Animations ───────────────────────────────────────────────────────────────
@@ -56,10 +56,13 @@ function DeltaStrip({ deltas, T }: { deltas: TraceResult['deltas']; T: Theme }) 
     { label: 'tokens', value: deltas.tokensPct },
   ];
 
+  const overlineGradient = `linear-gradient(90deg, ${T.withAccent}, ${T.primary})`;
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 12, marginBottom: 20, animation: 'oc-fadein 0.4s ease' }}>
       {items.map(({ label, value }) => (
-        <div key={label} style={{ textAlign: 'center', padding: '20px 12px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 12, borderTop: `4px solid ${T.withAccent}` }}>
+        <div key={label} style={{ textAlign: 'center', padding: '20px 12px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: overlineGradient }} />
           <div style={{ fontSize: '3rem', fontWeight: 800, color: T.withAccent, letterSpacing: '-0.03em', lineHeight: 1 }}>
             {value}%
           </div>
@@ -87,11 +90,13 @@ function MetricsBarGraph({ without, with: with_, deltas, T }: { without: AgentRu
 
   function Bar({ value, max, accent, sublabel }: { value: number; max: number; accent: string; sublabel: string }) {
     const height = max > 0 ? (value / max) * 100 : 0;
+    // Gradient fades from solid accent at top to 50% opacity at bottom
+    const barGradient = `linear-gradient(to bottom, ${accent}, ${accent}80)`;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
         <div style={{ width: '100%', height: 100, background: T.barBg, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: accent, transition: 'height 0.4s ease' }} />
+          <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: barGradient, transition: 'height 0.4s ease' }} />
         </div>
         <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{sublabel}</span>
       </div>
@@ -111,7 +116,6 @@ function MetricsBarGraph({ without, with: with_, deltas, T }: { without: AgentRu
                 <Bar value={m.without} max={max} accent={T.withoutAccent} sublabel="Without" />
                 <Bar value={m.with}    max={max} accent={T.withAccent}    sublabel="With" />
               </div>
-              <div style={{ fontSize: '0.75rem', color: T.success, fontWeight: 600, textAlign: 'center' }}>{m.pct}% fewer</div>
             </div>
           );
         })}
@@ -411,14 +415,67 @@ function QueryClassificationBar({
   );
 }
 
-// ─── Main Trace page ──────────────────────────────────────────────────────────
+// ─── Snapshot-driven prompt suggestions ──────────────────────────────────────
 
-const EXAMPLE_PROMPTS = [
+const FALLBACK_PROMPTS = [
   'What should I focus on right now?',
-  'Am I free at 3pm today?',
-  'What tasks are overdue?',
-  'Did anyone email me urgently?',
+  'Do I have any urgent emails that need a reply?',
+  'What tasks are overdue or at risk?',
+  'Give me a full standup summary — calendar, email, and tasks.',
 ];
+
+/**
+ * Generates up to 4 context-grounded suggested prompts from a live snapshot.
+ * Prompts are intentionally vague and cross-signal so ZeroCall has maximum
+ * advantage over the raw-tool agent (which must call multiple tools to answer).
+ */
+function generateSuggestedPrompts(snapshot: WorkStateSnapshot): string[] {
+  const suggestions: string[] = [];
+
+  // Always include a broad "what should I focus on" opener
+  suggestions.push('What should I focus on right now?');
+
+  // Email signal: mention a real counterparty if one exists
+  const actionEmail = snapshot.email.action_required[0];
+  const awaitingEmail = snapshot.email.awaiting_reply[0];
+  if (actionEmail) {
+    suggestions.push(`I have an email from ${actionEmail.counterparty} — should I prioritize it, and is my schedule clear to respond today?`);
+  } else if (snapshot.email.unread_count > 0) {
+    suggestions.push(`I have ${snapshot.email.unread_count} unread emails — are any urgent, and do I have time to address them today?`);
+  }
+  if (awaitingEmail) {
+    suggestions.push(`I'm waiting on a reply from ${awaitingEmail.counterparty} — is there anything else blocking me in the meantime?`);
+  }
+
+  // Task signal: mention a real overdue or in-progress task if one exists
+  const overdueTask = snapshot.tasks.overdue[0];
+  const inProgressTask = snapshot.tasks.in_progress[0];
+  if (overdueTask) {
+    suggestions.push(`"${overdueTask.title}" is overdue — what else is blocked or at risk this week?`);
+  } else if (inProgressTask) {
+    suggestions.push(`I'm working on "${inProgressTask.title}" — what other tasks need attention today?`);
+  } else if (snapshot.tasks.due_today.length > 0) {
+    suggestions.push(`I have ${snapshot.tasks.due_today.length} task${snapshot.tasks.due_today.length > 1 ? 's' : ''} due today — how should I prioritize my time?`);
+  }
+
+  // Calendar signal: mention a real meeting or free block
+  const nextMeeting = snapshot.calendar.today[0];
+  const freeBlock = snapshot.calendar.free_blocks[0];
+  if (nextMeeting && freeBlock) {
+    suggestions.push(`I have a meeting for "${nextMeeting.title}" coming up — what should I prepare, and is there a free block to do it?`);
+  } else if (freeBlock) {
+    suggestions.push(`What's the most valuable thing I could do with my free time today given everything on my plate?`);
+  }
+
+  // Cap at 4, fill with a cross-signal fallback if short
+  if (suggestions.length < 4) {
+    suggestions.push('Give me a full standup summary — calendar, email, and tasks.');
+  }
+
+  return suggestions.slice(0, 4);
+}
+
+// ─── Main Trace page ──────────────────────────────────────────────────────────
 
 type StreamState = {
   prompt: string;
@@ -440,6 +497,7 @@ export default function Trace({ T }: { T: Theme }) {
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
+  const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS);
   const lastSyncRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -465,6 +523,13 @@ export default function Trace({ T }: { T: Theme }) {
   }, []);
 
   useEffect(() => { refreshAdaptiveStats(); }, [refreshAdaptiveStats]);
+
+  // Fetch snapshot on mount to generate context-grounded prompt suggestions.
+  useEffect(() => {
+    getSnapshot().then(s => {
+      if (s) setSuggestedPrompts(generateSuggestedPrompts(s));
+    }).catch(() => { /* ignore — fall back to static prompts */ });
+  }, []);
 
   async function handleToggle(section: string, enabled: boolean) {
     try {
@@ -573,7 +638,7 @@ export default function Trace({ T }: { T: Theme }) {
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          {EXAMPLE_PROMPTS.map(p => (
+          {suggestedPrompts.map((p: string) => (
             <button key={p} type="button" onClick={() => setPrompt(p)} disabled={loading}
               style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}>
               {p}
