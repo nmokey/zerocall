@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { AgentRun, AdaptiveStats, FetchProfile, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
-import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
+import { getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import styles from './Trace.module.css';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -366,27 +366,8 @@ export default function Trace() {
   const [loading, setLoading] = useState(false);
   const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [lastSyncSuccess, setLastSyncSuccess] = useState<boolean | null>(null);
   const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS);
-  const lastSyncRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    async function check() {
-      try {
-        const s = await getStatus();
-        if (s.lastSync && s.lastSync !== lastSyncRef.current) {
-          lastSyncRef.current = s.lastSync;
-          setLastSync(s.lastSync);
-          setLastSyncSuccess(s.lastSyncSuccess);
-        }
-      } catch { /* ignore polling errors silently */ }
-    }
-    check();
-    const id = setInterval(check, 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   const refreshAdaptiveStats = useCallback(async () => {
     try {
@@ -474,37 +455,14 @@ export default function Trace() {
 
   const bothDone = !!(stream?.without && stream?.with);
 
-  const syncLabel = lastSync ? (() => {
-    const now = new Date();
-    const syncTime = new Date(lastSync);
-    const diffMs = now.getTime() - syncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'last sync \u00b7 just now \u00b7 ';
-    if (diffMins < 60) return `last sync \u00b7 ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago \u00b7 `;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `last sync \u00b7 ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago \u00b7 `;
-    const diffDays = Math.floor(diffHours / 24);
-    return `last sync \u00b7 ${diffDays} day${diffDays !== 1 ? 's' : ''} ago \u00b7 `;
-  })() : null;
-
   return (
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>Live Trace</h1>
-          <p className={styles.pageSubtitle}>
-            Run both agents against your live data and see the side-by-side comparison.
-          </p>
-        </div>
-        {syncLabel && (
-          <span className={styles.syncLabel}>
-            {syncLabel}
-            <span className={lastSyncSuccess ? styles.syncSuccess : styles.syncFailed}>
-              {lastSyncSuccess ? '\u2713 success' : '\u2717 failed'}
-            </span>
-          </span>
-        )}
+        <h1 className={styles.pageTitle}>Live Trace</h1>
+        <p className={styles.pageSubtitle}>
+          Run both agents against your live data and see the side-by-side comparison.
+        </p>
       </div>
 
       {/* Prompt input */}

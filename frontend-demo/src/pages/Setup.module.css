@@ -6,9 +6,6 @@
 
 /* Header */
 .pageHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   margin-bottom: 28px;
 }
 
@@ -23,49 +20,6 @@
   color: var(--zc-muted);
   font-size: 0.875rem;
   margin-top: 5px;
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-top: 4px;
-}
-
-.syncLabel {
-  font-size: 0.78rem;
-  color: var(--zc-dimmer);
-}
-
-.syncSuccess {
-  color: var(--zc-success);
-  font-weight: 500;
-}
-
-.syncFailed {
-  color: var(--zc-error);
-  font-weight: 500;
-}
-
-.syncButton {
-  padding: 8px 16px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  font-family: inherit;
-  border: 1px solid var(--zc-border);
-  border-radius: 6px;
-  background: var(--zc-primary);
-  color: white;
-  cursor: pointer;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.syncButton:disabled {
-  background: var(--zc-input-bg);
-  color: var(--zc-text);
-  cursor: default;
 }
 
 /* Banner */
