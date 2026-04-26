@@ -2,21 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { AgentRun, TraceResult, ToolCallRecord } from '../api';
 import { getStatus } from '../api';
-
-const T = {
-  bg: '#ece8dc',
-  card: '#f0ece2',
-  cardHead: '#e4dfd2',
-  border: '#c4bab0',
-  primary: '#c05a2b',
-  text: '#2a2218',
-  muted: '#7a7060',
-  dimmer: '#8a7e70',
-  success: '#2e7d4f',
-  error: '#b53030',
-  withoutAccent: '#b53030',
-  withAccent: '#2e7d4f',
-};
+import { useTheme } from '../theme';
 
 // ─── Animations ───────────────────────────────────────────────────────────────
 
@@ -31,6 +17,7 @@ const KEYFRAMES = `
 // ─── Sync toast ───────────────────────────────────────────────────────────────
 
 function SyncToast({ lastSync }: { lastSync: string }) {
+  const { T } = useTheme();
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setVisible(false), 4000);
@@ -43,18 +30,20 @@ function SyncToast({ lastSync }: { lastSync: string }) {
       position: 'fixed', top: 16, right: 24, zIndex: 100,
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '9px 16px', borderRadius: 8,
-      background: '#f0ece2', border: '1.5px solid #c4bab0',
+      background: T.card, border: `1.5px solid ${T.border}`,
       boxShadow: '0 2px 10px rgba(0,0,0,0.10)',
-      fontSize: '0.8rem', color: '#2a2218',
+      fontSize: '0.8rem', color: T.text,
       animation: 'oc-toastin 0.25s ease',
+      transition: 'background 0.3s, border-color 0.3s, color 0.3s',
     }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2e7d4f', flexShrink: 0, display: 'inline-block' }} />
-      Synced · {new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.success, flexShrink: 0, display: 'inline-block' }} />
+      Synced \u00b7 {new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
     </div>
   );
 }
 
 function Spinner({ size = 16 }: { size?: number }) {
+  const { T } = useTheme();
   return (
     <span style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8, flexShrink: 0 }} />
   );
@@ -63,6 +52,7 @@ function Spinner({ size = 16 }: { size?: number }) {
 // ─── Big delta metrics strip ──────────────────────────────────────────────────
 
 function DeltaStrip({ deltas }: { deltas: TraceResult['deltas'] }) {
+  const { T } = useTheme();
   const items = [
     { label: 'tool calls', value: deltas.toolCallsPct },
     { label: 'LLM turns', value: deltas.llmTurnsPct },
@@ -89,6 +79,7 @@ function DeltaStrip({ deltas }: { deltas: TraceResult['deltas'] }) {
 // ─── Bar graph ────────────────────────────────────────────────────────────────
 
 function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; with: AgentRun; deltas: TraceResult['deltas'] }) {
+  const { T } = useTheme();
   const withoutTokens = without.inputTokens + without.outputTokens;
   const withTokens = with_.inputTokens + with_.outputTokens;
 
@@ -104,7 +95,7 @@ function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
-        <div style={{ width: '100%', height: 100, background: '#e8e4d8', borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: 100, background: T.lockedBg, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: accent, transition: 'height 0.4s ease' }} />
         </div>
         <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{sublabel}</span>
@@ -137,6 +128,7 @@ function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; 
 // ─── Agent panel ──────────────────────────────────────────────────────────────
 
 function MetricBadge({ label, value, color }: { label: string; value: string | number; color?: string }) {
+  const { T } = useTheme();
   return (
     <span style={{ fontSize: '0.75rem', color: T.muted }}>
       {label}: <span style={{ fontWeight: 600, color: color ?? T.text }}>{value}</span>
@@ -144,8 +136,8 @@ function MetricBadge({ label, value, color }: { label: string; value: string | n
   );
 }
 
-/** Tool call list — used both for live (in-progress) and completed states. */
 function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgress: boolean }) {
+  const { T } = useTheme();
   if (calls.length === 0 && !inProgress) {
     return <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>No tool calls</div>;
   }
@@ -153,7 +145,7 @@ function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgre
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {calls.map((tc, i) => {
         const argStr = Object.keys(tc.input).length > 0 ? JSON.stringify(tc.input) : '';
-        const truncated = argStr.length > 70 ? argStr.slice(0, 70) + '…' : argStr;
+        const truncated = argStr.length > 70 ? argStr.slice(0, 70) + '\u2026' : argStr;
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: '0.78rem', animation: 'oc-slidein 0.25s ease' }}>
             <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{i + 1}.</span>
@@ -163,12 +155,11 @@ function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgre
           </div>
         );
       })}
-      {/* Spinner row for the next in-flight tool call */}
       {inProgress && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: T.muted, animation: 'oc-slidein 0.25s ease' }}>
           <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{calls.length + 1}.</span>
           <Spinner size={12} />
-          <span>calling tool…</span>
+          <span>calling tool\u2026</span>
         </div>
       )}
     </div>
@@ -179,16 +170,14 @@ interface AgentPanelProps {
   label: string;
   accent: string;
   run: AgentRun | null;
-  /** Live tool calls streamed before the run completes (without-agent only). */
   liveToolCalls?: ToolCallRecord[];
-  /** True while the agent is still running but hasn't fired any tool calls yet. */
   waiting?: boolean;
 }
 
 function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }: AgentPanelProps) {
-  const isLive = !run; // still running
+  const { T } = useTheme();
+  const isLive = !run;
 
-  // Pending — no data yet at all
   if (isLive && liveToolCalls.length === 0 && !waiting) {
     return (
       <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
@@ -196,13 +185,12 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
           <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent }}>{label}</div>
         </div>
         <div style={{ padding: '48px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: '0.85rem' }}>
-          <Spinner />Running…
+          <Spinner />Running\u2026
         </div>
       </div>
     );
   }
 
-  // Live view — agent still running, show accumulated tool calls
   if (isLive) {
     return (
       <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
@@ -217,7 +205,6 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
     );
   }
 
-  // Completed
   const totalTokens = run!.inputTokens + run!.outputTokens;
   return (
     <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card, animation: 'oc-fadein 0.35s ease' }}>
@@ -228,8 +215,8 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
         {run!.snapshotInjected ? (
           <div style={{ fontSize: '0.82rem', color: T.withAccent }}>
-            <span style={{ fontWeight: 600 }}>✦ Work context auto-injected</span>
-            <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>0 tool calls — harness injected the snapshot before first token</div>
+            <span style={{ fontWeight: 600 }}>\u2726 Work context auto-injected</span>
+            <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>0 tool calls \u2014 harness injected the snapshot before first token</div>
           </div>
         ) : (
           <ToolCallList calls={run!.toolCalls} inProgress={false} />
@@ -276,6 +263,7 @@ function pctReduction(from: number, to: number): number {
 }
 
 export default function Trace() {
+  const { T } = useTheme();
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [stream, setStream] = useState<StreamState | null>(null);
@@ -355,7 +343,7 @@ export default function Trace() {
       if (es.readyState === EventSource.CLOSED) return;
       es.close();
       setLoading(false);
-      setError('Connection lost — is the server running?');
+      setError('Connection lost \u2014 is the server running?');
       setStream(null);
     };
   }
@@ -384,22 +372,22 @@ export default function Trace() {
             onChange={e => setPrompt(e.target.value)}
             placeholder='e.g. "What should I focus on right now?"'
             disabled={loading}
-            style={{ flex: 1, padding: '10px 14px', border: `1.5px solid ${T.border}`, borderRadius: 8, fontSize: '0.925rem', background: 'white', color: T.text, outline: 'none', fontFamily: 'inherit' }}
+            style={{ flex: 1, padding: '10px 14px', border: `1.5px solid ${T.border}`, borderRadius: 8, fontSize: '0.925rem', background: T.inputBg, color: T.text, outline: 'none', fontFamily: 'inherit', transition: 'background 0.3s, color 0.3s, border-color 0.3s' }}
             onFocus={e => { e.target.style.borderColor = T.primary; }}
             onBlur={e => { e.target.style.borderColor = T.border; }}
           />
           <button
             type="submit"
             disabled={loading || !prompt.trim()}
-            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}
+            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap', transition: 'background 0.3s' }}
           >
-            {loading ? <><Spinner size={14} />Running…</> : 'Run Trace'}
+            {loading ? <><Spinner size={14} />Running\u2026</> : 'Run Trace'}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           {EXAMPLE_PROMPTS.map(p => (
             <button key={p} type="button" onClick={() => setPrompt(p)} disabled={loading}
-              style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}>
+              style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer', transition: 'background 0.3s, border-color 0.3s, color 0.3s' }}>
               {p}
             </button>
           ))}
@@ -408,15 +396,14 @@ export default function Trace() {
 
       {/* Error */}
       {error && (
-        <div style={{ padding: '13px 18px', borderRadius: 8, background: '#fdf0f0', border: '1px solid #efb8b8', color: T.error, fontSize: '0.875rem', marginBottom: 24 }}>
-          ✗ {error}
+        <div style={{ padding: '13px 18px', borderRadius: 8, background: T.errorBg, border: `1px solid ${T.errorBorder}`, color: T.error, fontSize: '0.875rem', marginBottom: 24, transition: 'background 0.3s, border-color 0.3s, color 0.3s' }}>
+          \u2717 {error}
         </div>
       )}
 
       {/* Results */}
       {stream && (
         <>
-          {/* Big numbers + bar graph — only when both done */}
           {bothDone && stream.deltas && (
             <>
               <DeltaStrip deltas={stream.deltas} />
