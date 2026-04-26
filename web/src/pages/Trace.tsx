@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun, TraceResult, ToolCallRecord } from '../api';
-import { getStatus } from '../api';
+import type { AgentRun, TraceResult, ToolCallRecord, AdaptiveStats, SectionConfig } from '../api';
+import { getStatus, getAdaptiveStats, applyAdaptiveSection } from '../api';
 
 const T = {
   bg: '#ece8dc',
@@ -253,6 +253,135 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
   );
 }
 
+// ─── Context Workflow Banner ──────────────────────────────────────────────────
+
+const BANNER_KEYFRAMES = `
+@keyframes oc-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes oc-badge-pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+`;
+
+const SECTION_META: Record<keyof SectionConfig, { label: string; icon: string; color: string }> = {
+  calendar: { label: 'Calendar', icon: '📅', color: '#3b6fc0' },
+  email:    { label: 'Email',    icon: '✉️', color: '#c07a2b' },
+  tasks:    { label: 'Tasks',    icon: '✓',  color: '#2e7d4f' },
+};
+
+interface WorkflowBannerProps {
+  stats: AdaptiveStats | null;
+  onToggle: (section: keyof SectionConfig, enabled: boolean) => void;
+  refreshing: boolean;
+}
+
+function ContextWorkflowBanner({ stats, onToggle, refreshing }: WorkflowBannerProps) {
+  if (!stats) return null;
+
+  const sections = (['calendar', 'email', 'tasks'] as Array<keyof SectionConfig>);
+  const hasSuggestions = stats.suggestions.length > 0;
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: '#2a2218', borderTop: `2px solid ${T.primary}`,
+      padding: '12px 24px',
+      display: 'flex', alignItems: 'center', gap: 16,
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    }}>
+      <style>{BANNER_KEYFRAMES}</style>
+
+      {/* Label */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#a09880' }}>
+          Context Workflows
+        </span>
+        {refreshing && (
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.primary, animation: 'oc-pulse 1s ease infinite' }} />
+        )}
+      </div>
+
+      {/* Section pills */}
+      <div style={{ display: 'flex', gap: 10, flex: 1, justifyContent: 'center' }}>
+        {sections.map(section => {
+          const meta = SECTION_META[section];
+          const enabled = stats.currentConfig[section];
+          const relevance = stats.sectionRelevance[section] ?? 1;
+          const relevancePct = Math.round(relevance * 100);
+          const suggestion = stats.suggestions.find(s => s.section === section);
+
+          return (
+            <button
+              key={section}
+              onClick={() => onToggle(section, !enabled)}
+              title={enabled
+                ? `${meta.label} is active (${relevancePct}% relevance). Click to disable.`
+                : `${meta.label} is disabled. Click to re-enable.`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 14px', borderRadius: 20,
+                border: `1.5px solid ${enabled ? meta.color : '#555'}`,
+                background: enabled ? `${meta.color}18` : '#3a3428',
+                cursor: 'pointer',
+                transition: 'all 0.35s ease',
+                opacity: enabled ? 1 : 0.55,
+              }}
+            >
+              <span style={{ fontSize: '0.9rem' }}>{meta.icon}</span>
+              <span style={{
+                fontSize: '0.8rem', fontWeight: 600,
+                color: enabled ? '#f0ece2' : '#888',
+                textDecoration: enabled ? 'none' : 'line-through',
+                transition: 'color 0.35s ease',
+              }}>
+                {meta.label}
+              </span>
+
+              {/* Relevance badge */}
+              <span style={{
+                fontSize: '0.68rem', fontWeight: 700,
+                padding: '1px 6px', borderRadius: 8,
+                background: enabled
+                  ? (relevancePct < 15 ? '#b5303030' : `${meta.color}40`)
+                  : '#55555540',
+                color: enabled
+                  ? (relevancePct < 15 ? '#ef9090' : '#d0ccc0')
+                  : '#777',
+                animation: suggestion ? 'oc-badge-pop 0.4s ease' : undefined,
+                transition: 'background 0.35s ease, color 0.35s ease',
+              }}>
+                {relevancePct}%
+              </span>
+
+              {/* Token savings tag for suggestions */}
+              {suggestion && enabled && (
+                <span style={{
+                  fontSize: '0.62rem', fontWeight: 600,
+                  padding: '1px 5px', borderRadius: 6,
+                  background: '#b5303025', color: '#ef9090',
+                  animation: 'oc-badge-pop 0.4s ease 0.1s both',
+                  whiteSpace: 'nowrap',
+                }}>
+                  save ~{suggestion.projectedTokenSavings} tok
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Query count + hint */}
+      <div style={{ flexShrink: 0, textAlign: 'right' }}>
+        <div style={{ fontSize: '0.72rem', color: '#a09880' }}>
+          {stats.queryCount} {stats.queryCount === 1 ? 'query' : 'queries'} logged
+        </div>
+        {hasSuggestions && (
+          <div style={{ fontSize: '0.65rem', color: '#ef9090', marginTop: 2 }}>
+            Click dim sections to toggle
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Trace page ──────────────────────────────────────────────────────────
 
 const EXAMPLE_PROMPTS = [
@@ -299,6 +428,34 @@ export default function Trace() {
     return () => clearInterval(id);
   }, []);
 
+  // Adaptive stats state
+  const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
+  const [statsRefreshing, setStatsRefreshing] = useState(false);
+
+  const refreshStats = useCallback(async () => {
+    setStatsRefreshing(true);
+    try {
+      const stats = await getAdaptiveStats();
+      setAdaptiveStats(stats);
+    } catch {
+      // Non-critical — banner just won't show
+    } finally {
+      setStatsRefreshing(false);
+    }
+  }, []);
+
+  // Fetch adaptive stats on mount
+  useEffect(() => { refreshStats(); }, [refreshStats]);
+
+  async function handleToggle(section: keyof SectionConfig, enabled: boolean) {
+    try {
+      await applyAdaptiveSection(section, enabled);
+      await refreshStats();
+    } catch {
+      // Silently fail — user can retry
+    }
+  }
+
   async function handleRun(e: React.FormEvent) {
     e.preventDefault();
     if (!prompt.trim()) return;
@@ -341,6 +498,8 @@ export default function Trace() {
           tokensPct:    pctReduction(withoutTokens,                withTokens),
         }} : s);
       }
+      // Refresh adaptive stats after each trace — the query was logged server-side
+      refreshStats();
     });
 
     es.addEventListener('error', (e: MessageEvent) => {
@@ -363,7 +522,7 @@ export default function Trace() {
   const bothDone = !!(stream?.without && stream?.with);
 
   return (
-    <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '48px 24px 80px', maxWidth: 1100, margin: '0 auto' }}>
       <style>{KEYFRAMES}</style>
       {lastSync && <SyncToast key={lastSync} lastSync={lastSync} />}
 
@@ -444,6 +603,13 @@ export default function Trace() {
           </div>
         </>
       )}
+
+      {/* Context Workflow Banner — docked at the bottom */}
+      <ContextWorkflowBanner
+        stats={adaptiveStats}
+        onToggle={handleToggle}
+        refreshing={statsRefreshing || loading}
+      />
     </div>
   );
 }
