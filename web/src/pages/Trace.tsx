@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { AgentRun, TraceResult, ToolCallRecord } from '../api';
+import { getStatus } from '../api';
 
 const T = {
   bg: '#ece8dc',
@@ -20,10 +21,38 @@ const T = {
 // ─── Animations ───────────────────────────────────────────────────────────────
 
 const KEYFRAMES = `
-@keyframes oc-spin    { to { transform: rotate(360deg); } }
-@keyframes oc-fadein  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes oc-slidein { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes oc-spin      { to { transform: rotate(360deg); } }
+@keyframes oc-fadein    { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes oc-slidein   { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes oc-toastin   { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes oc-toastout  { from { opacity: 1; } to { opacity: 0; } }
 `;
+
+// ─── Sync toast ───────────────────────────────────────────────────────────────
+
+function SyncToast({ lastSync }: { lastSync: string }) {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(false), 4000);
+    return () => clearTimeout(t);
+  }, [lastSync]);
+
+  if (!visible) return null;
+  return (
+    <div style={{
+      position: 'fixed', top: 16, right: 24, zIndex: 100,
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '9px 16px', borderRadius: 8,
+      background: '#f0ece2', border: '1.5px solid #c4bab0',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.10)',
+      fontSize: '0.8rem', color: '#2a2218',
+      animation: 'oc-toastin 0.25s ease',
+    }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2e7d4f', flexShrink: 0, display: 'inline-block' }} />
+      Synced · {new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    </div>
+  );
+}
 
 function Spinner({ size = 16 }: { size?: number }) {
   return (
@@ -251,6 +280,24 @@ export default function Trace() {
   const [loading, setLoading] = useState(false);
   const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const lastSyncRef = useRef<string | null>(null);
+
+  // Poll /api/status every 30s and show a toast whenever lastSync changes.
+  useEffect(() => {
+    async function check() {
+      try {
+        const s = await getStatus();
+        if (s.lastSync && s.lastSync !== lastSyncRef.current) {
+          lastSyncRef.current = s.lastSync;
+          setLastSync(s.lastSync);
+        }
+      } catch { /* ignore polling errors silently */ }
+    }
+    check();
+    const id = setInterval(check, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   async function handleRun(e: React.FormEvent) {
     e.preventDefault();
@@ -318,6 +365,7 @@ export default function Trace() {
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
       <style>{KEYFRAMES}</style>
+      {lastSync && <SyncToast key={lastSync} lastSync={lastSync} />}
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
