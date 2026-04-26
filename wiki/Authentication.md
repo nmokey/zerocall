@@ -29,23 +29,19 @@ export function createOAuthClient(): OAuth2Client {
 
 ### Flow
 
-#### First Run
+#### First Run (via Setup Page)
 
-1. `getAuthenticatedClient()` checks for a saved token at `tokens.json`
-2. If no token exists, generates an OAuth consent URL and prints it to the console
-3. Starts a local HTTP server on the redirect URI port (default: 3000)
-4. User opens the URL in their browser and grants access
-5. Google redirects to `localhost:3000/oauth2callback` with an auth code
-6. The code is exchanged for access + refresh tokens
-7. Tokens are persisted to `tokens.json`
+1. User opens `http://localhost:3000/setup` in their browser
+2. Enters Google OAuth credentials (Client ID and Client Secret) and saves them
+3. Clicks **Connect Google Account** on the setup page
+4. Setup page calls `GET /api/auth/google` to get the OAuth consent URL
+5. Browser redirects to Google's OAuth consent screen
+6. User grants access; Google redirects to `GET /oauth2callback` on the backend
+7. Backend exchanges the auth code for access + refresh tokens
+8. Tokens are persisted to `server/tokens.json`
+9. Browser redirects back to `/setup` with a success message
 
-```
-Open this URL in your browser to authenticate:
-https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=...
-
-Waiting for OAuth redirect on port 3000...
-Tokens saved to tokens.json
-```
+Alternatively, a CLI OAuth flow is available via `npm run auth:google` for terminal-only environments.
 
 #### Subsequent Runs
 

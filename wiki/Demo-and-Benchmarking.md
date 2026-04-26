@@ -139,7 +139,7 @@ The mock also exports flattened arrays (`MOCK_GMAIL_THREADS`, `MOCK_CALENDAR_EVE
 
 ---
 
-## Benchmark Prompts (`demo/prompts.ts`)
+## Benchmark Prompts (`shared/prompts.ts`)
 
 20 representative productivity prompts across five categories:
 

@@ -87,7 +87,7 @@ The `without` agent's latency is dominated by real network round-trips to Google
 
 ## benchmark.ts — Quantitative metrics across 20 prompts
 
-Runs all 20 prompts from `demo/prompts.ts` through both agents sequentially and prints a full comparison table plus aggregate summary. A 15-second pause between prompts avoids Anthropic API rate limits.
+Runs all 20 prompts from `shared/prompts.ts` through both agents sequentially and prints a full comparison table plus aggregate summary. A 15-second pause between prompts avoids Anthropic API rate limits.
 
 ```bash
 npm run live:benchmark
@@ -110,7 +110,7 @@ SUMMARY (20 prompts)
 
 ## Prompts
 
-Shared with the demo — the 20 benchmark prompts live in [`demo/prompts.ts`](../demo/prompts.ts). They cover the full range of productivity queries:
+Shared with the demo — the 20 benchmark prompts live in [`shared/prompts.ts`](../shared/prompts.ts). They cover the full range of productivity queries:
 - Priority / focus queries ("What should I focus on?")
 - Calendar queries ("Am I free at 3pm?")
 - Email queries ("Did Sarah reply?")

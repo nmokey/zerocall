@@ -31,7 +31,7 @@ npm run demo:trace -- p04
 npm run demo:trace -- 7
 ```
 
-**Uses mocked data** so it runs offline without provider credentials. To use real data, swap the `runWithoutOneCall` and `runWithOneCall` implementations in `agents/` to call live APIs.
+**Uses mocked data** so it runs offline without provider credentials.
 
 **Sample output:**
 
@@ -46,14 +46,16 @@ WITHOUT OneCall  (raw tool calls)
 
   Total latency: 2340ms   Tokens: 3120   Tool calls: 5
 
-WITH OneCall  (get_work_state)
+WITH OneCall  (harness injection)
 ────────────────────────────────────────────────────────────
-  1. get_work_state   0ms
+  ✦ Work context auto-injected into system prompt
+  (0 tool calls — harness injected the snapshot before first token)
 
-  Total latency: 890ms   Tokens: 2180   Tool calls: 1
+  Total latency: 890ms   Tokens: 2180   Tool calls: 0
 
 ─── Result ───────────────────────────────────────────────
-  Tool calls:  5 → 1  (80% fewer)
+  Tool calls:  5 → 0  (100% fewer)
+  LLM turns:   3 → 1  (67% fewer)
   Latency:     2340ms → 890ms  (62% faster)
   Tokens:      3120 → 2180  (30% fewer)
 ```
@@ -62,7 +64,7 @@ WITH OneCall  (get_work_state)
 
 ## benchmark.ts — Quantitative metrics across 20 prompts
 
-Runs all 20 prompts from `prompts.ts` through both agents and prints a full comparison table plus aggregate summary.
+Runs all 20 prompts from `shared/prompts.ts` through both agents and prints a full comparison table plus aggregate summary.
 
 ```bash
 npm run demo:benchmark
@@ -72,7 +74,7 @@ Output is a markdown-friendly table plus a summary block:
 
 ```
 SUMMARY (20 prompts)
-  Tool call reduction:   78.5%  (112 → 24 total calls)
+  Tool call reduction:   100.0%  (112 → 0 total calls)
   Avg latency reduction: 61.2%  (2180ms → 845ms)
   Avg token reduction:   28.4%  (3050 → 2184 tokens/query)
 ```
@@ -81,7 +83,7 @@ SUMMARY (20 prompts)
 
 ## Prompts
 
-The 20 benchmark prompts are in `prompts.ts`. They cover the full range of productivity queries:
+The 20 benchmark prompts are in `shared/prompts.ts`. They cover the full range of productivity queries:
 - Priority / focus queries ("What should I focus on?")
 - Calendar queries ("Am I free at 3pm?")
 - Email queries ("Did Sarah reply?")

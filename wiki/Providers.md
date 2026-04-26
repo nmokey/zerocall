@@ -1,10 +1,10 @@
 # Providers
 
-OneCall syncs data from three sources: Gmail, Google Calendar, and Notion. Each provider is implemented as a standalone module in `src/providers/`.
+OneCall syncs data from three sources: Gmail, Google Calendar, and Notion. Each provider is implemented as a standalone module in `server/src/providers/`.
 
 ---
 
-## Gmail (`src/providers/gmail.ts`)
+## Gmail (`server/src/providers/gmail.ts`)
 
 ### What It Fetches
 
@@ -46,7 +46,7 @@ async function fetchEmailState(auth: OAuth2Client): Promise<{
 
 ---
 
-## Google Calendar (`src/providers/calendar.ts`)
+## Google Calendar (`server/src/providers/calendar.ts`)
 
 ### What It Fetches
 
@@ -88,7 +88,7 @@ async function fetchCalendarState(auth: OAuth2Client): Promise<{
 
 ---
 
-## Notion (`src/providers/notion.ts`)
+## Notion (`server/src/providers/notion.ts`)
 
 ### What It Fetches
 

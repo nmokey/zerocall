@@ -36,11 +36,12 @@ Then fill in the required values.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GOOGLE_REDIRECT_URI` | `http://localhost:3000/oauth2callback` | OAuth2 redirect URI |
-| `SYNC_INTERVAL_MINUTES` | `15` | How often to poll providers (in minutes) |
+| `SYNC_INTERVAL_MINUTES` | `15` | Max age of cached snapshot before re-syncing (in minutes) |
 | `WORK_DAY_START` | `09:00` | Start of working hours for free block calculation |
 | `WORK_DAY_END` | `18:00` | End of working hours for free block calculation |
-| `GMAIL_WEBHOOK_PORT` | `3001` | Port for Gmail push notification handler (not yet implemented) |
-| `GMAIL_TOPIC_NAME` | — | Google Cloud Pub/Sub topic for Gmail push (not yet implemented) |
+| `ENABLE_GMAIL` | `true` | Enable Gmail integration |
+| `ENABLE_CALENDAR` | `true` | Enable Google Calendar integration |
+| `ENABLE_NOTION` | `true` | Enable Notion integration |
 
 ---
 

@@ -1,6 +1,6 @@
 # Data Types
 
-All core types are defined in `src/types/snapshot.ts`. The `WorkStateSnapshot` is the central data structure that flows through every layer of the system.
+All core types are defined in `harness/src/types.ts`. The `WorkStateSnapshot` is the central data structure that flows through every layer of the system.
 
 ---
 
@@ -88,7 +88,7 @@ interface TimeBlock {
 }
 ```
 
-Only blocks ≥30 minutes are included. Computed by `computeFreeBlocks()` in `src/providers/calendar.ts`.
+Only blocks ≥30 minutes are included. Computed by `computeFreeBlocks()` in `server/src/providers/calendar.ts`.
 
 ---
 
@@ -130,7 +130,7 @@ The `source` field uses a union type that anticipates future provider additions.
 
 ## TaskProvider Interface
 
-Defined in `src/providers/types.ts`. All task integrations implement this interface:
+Defined in `server/src/providers/types.ts`. All task integrations implement this interface:
 
 ```typescript
 interface TaskProvider {

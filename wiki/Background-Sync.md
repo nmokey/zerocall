@@ -1,40 +1,53 @@
 # Background Sync
 
-The background sync layer keeps the `WorkStateSnapshot` fresh by polling providers on a regular interval and persisting results to SQLite.
+The sync layer keeps the `WorkStateSnapshot` fresh by fetching from providers on demand and persisting results to SQLite.
 
 ---
 
-## Scheduler (`src/sync/scheduler.ts`)
+## Lazy Caching (`server/src/sync/scheduler.ts`)
 
-Uses `node-cron` to run `syncAll()` on a configurable interval:
+Instead of polling on a fixed interval, OneCall uses **lazy caching**: syncs only fire when a snapshot is actually requested and the cache is stale.
 
 ```typescript
-export function startScheduler(): void {
-  const intervalMinutes = parseInt(process.env.SYNC_INTERVAL_MINUTES ?? '15', 10);
-  const cronExpr = `*/${intervalMinutes} * * * *`;
+const DEFAULT_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
 
-  cron.schedule(cronExpr, () => {
-    syncAll().catch(err => console.error('[scheduler] sync error:', err));
-  });
+export async function ensureFreshSnapshot(
+  maxAgeMs: number = DEFAULT_MAX_AGE_MS,
+): Promise<WorkStateSnapshot | null> {
+  const cached = readLatestSnapshot();
 
-  console.log(`[scheduler] polling every ${intervalMinutes} minutes`);
+  if (cached && !isStale(cached, maxAgeMs)) {
+    return cached;
+  }
 
-  // Run immediately on startup
-  syncAll().catch(err => console.error('[scheduler] initial sync error:', err));
+  console.log('[cache] snapshot is %s — syncing now', cached ? 'stale' : 'empty');
+  await syncAll();
+  return readLatestSnapshot();
+}
+
+function isStale(snapshot: WorkStateSnapshot, maxAgeMs: number): boolean {
+  const age = Date.now() - new Date(snapshot.as_of).getTime();
+  return age > maxAgeMs;
 }
 ```
 
 ### Behavior
 
-1. On startup, runs one sync immediately so the snapshot is available right away
-2. Schedules recurring syncs at the configured interval (default: 15 minutes)
-3. Sync errors are caught and logged — they do not crash the scheduler or the process
+1. If a cached snapshot exists and is younger than `maxAgeMs` (default 15 min), returns it immediately
+2. If the cache is stale or empty, triggers a full `syncAll()` before returning
+3. This replaces the previous `node-cron` background poller — syncs only happen when needed
+
+### Why Lazy Over Polling
+
+- No wasted API calls when nobody is querying
+- Snapshot is always fresh when actually used (guaranteed ≤15 min old)
+- Simpler code — no cron dependency, no background timer management
 
 ---
 
-## syncAll (`src/sync/syncAll.ts`)
+## syncAll (`server/src/sync/syncAll.ts`)
 
-Orchestrates a full sync across all providers:
+Orchestrates a full sync across all enabled providers:
 
 ```typescript
 export async function syncAll(): Promise<void> {
@@ -42,36 +55,19 @@ export async function syncAll(): Promise<void> {
   const start = Date.now();
   const errors: string[] = [];
 
-  // Initialize empty snapshot
   const snapshot: WorkStateSnapshot = { ... };
 
-  try {
-    const auth = await getAuthenticatedClient();
-    const notion = new NotionProvider();
+  // Check integration preferences
+  const enableGmail = process.env.ENABLE_GMAIL !== 'false';
+  const enableCalendar = process.env.ENABLE_CALENDAR !== 'false';
+  const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
-    // Fetch all providers in parallel
-    const [emailResult, calendarResult, tasksResult] = await Promise.allSettled([
-      fetchEmailState(auth),
-      fetchCalendarState(auth),
-      notion.getTasks(),
-    ]);
+  // Fetch enabled providers in parallel via Promise.allSettled
+  // Gmail and Calendar share the Google OAuth client
+  // ...
 
-    // Merge results — failed providers log errors but don't block others
-    if (emailResult.status === 'fulfilled') {
-      snapshot.email = emailResult.value;
-      snapshot.meta.sources.push('gmail');
-    } else {
-      errors.push(`gmail: ${emailResult.reason}`);
-    }
-
-    // ... same pattern for calendar and tasks ...
-
-    writeSnapshot(snapshot);
-    logSyncEnd(logId, true);
-  } catch (err) {
-    logSyncEnd(logId, false, String(err));
-    console.error('[sync] fatal error:', err);
-  }
+  writeSnapshot(snapshot);
+  logSyncEnd(logId, true);
 }
 ```
 
@@ -83,12 +79,14 @@ export async function syncAll(): Promise<void> {
 
 3. **Sync logging** — every sync attempt is logged to the `sync_log` table with start time, end time, success flag, and error details.
 
-4. **Snapshot overwrite** — each sync writes a new snapshot row. Old snapshots are pruned to keep only the last 10.
+4. **Integration toggles** — individual providers can be disabled via `ENABLE_GMAIL=false`, `ENABLE_CALENDAR=false`, or `ENABLE_NOTION=false` environment variables. All default to enabled.
+
+5. **Shared auth** — Gmail and Calendar share the Google OAuth client, so only one auth call is needed for both.
 
 ### Console Output
 
 ```
-[scheduler] polling every 15 minutes
+[cache] snapshot is stale — syncing now
 [sync] done in 22547ms — sources: gmail, gcal, notion
 ```
 
@@ -100,7 +98,7 @@ If a provider fails:
 
 ---
 
-## Webhooks (`src/sync/webhooks.ts`)
+## Webhooks (`server/src/sync/webhooks.ts`)
 
 A placeholder for Gmail push notifications. Currently unimplemented:
 

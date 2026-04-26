@@ -40,11 +40,11 @@ Traditional approaches expose work context through tools that the model must dec
 
 OneCall has three layers:
 
-**Layer 1: Background sync** — A node-cron loop that polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
+**Layer 1: Background sync** — Polls Gmail, Google Calendar, and Notion via REST APIs, distills raw responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database. Uses lazy caching: syncs only fire when a snapshot is requested and the cache is stale (>15 min default).
 
 **Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond) and injects it into `options.body.system` as a structured plain-text block.
 
-**Layer 3: HTTP API + dashboard** — An Express server exposes a REST API on port 3000. A Vite + React frontend (in `web/`) connects to it. The dashboard handles first-run setup (credential entry + Google OAuth), shows the current snapshot, and lets users trigger a manual sync.
+**Layer 3: HTTP API + setup page** — An Express server exposes a REST API on port 3000 and serves a server-rendered HTML setup page at `/setup`. The setup page handles first-run credential entry (Google OAuth, Notion token) and shows sync status. No separate frontend build needed.
 
 State delivery is exclusively through harness injection.
 
@@ -63,14 +63,15 @@ onecall/
 │   └── tsconfig.json
 ├── server/                    # Background sync server + Express API
 │   ├── src/
-│   │   ├── main.ts            # Entrypoint: initSchema + startScheduler + HTTP server
+│   │   ├── main.ts            # Entrypoint: initSchema + HTTP server
 │   │   ├── api/
-│   │   │   ├── server.ts      # Express HTTP server — all /api/* routes + /oauth2callback
-│   │   │   └── config.ts      # Credential validation + .env writing
+│   │   │   ├── server.ts      # Express HTTP server — /setup, /api/*, /oauth2callback
+│   │   │   ├── config.ts      # Credential validation + .env writing
+│   │   │   └── setup.ts       # Server-rendered HTML setup page + POST handler
 │   │   ├── sync/
-│   │   │   ├── scheduler.ts   # node-cron polling loop
+│   │   │   ├── scheduler.ts   # Lazy cache: ensureFreshSnapshot()
 │   │   │   ├── syncAll.ts     # Orchestrates a full sync across all providers
-│   │   │   └── webhooks.ts    # Optional: Gmail push notification handler
+│   │   │   └── webhooks.ts    # Placeholder: Gmail push notification handler
 │   │   ├── providers/
 │   │   │   ├── types.ts       # TaskProvider interface
 │   │   │   ├── gmail.ts       # Gmail API integration
@@ -84,27 +85,26 @@ onecall/
 │   │       └── google.ts      # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
 │   ├── package.json
 │   └── tsconfig.json
-├── web/                       # Vite + React frontend
-│   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx            # Checks /api/status → routes to Setup or Dashboard
-│   │   ├── api.ts             # Typed fetch wrappers for all /api/* endpoints
-│   │   └── pages/
-│   │       ├── Setup.tsx      # Two-step: credential form → Google OAuth
-│   │       └── Dashboard.tsx  # Snapshot view + sync status + Sync Now button
-│   ├── vite.config.ts         # Dev proxy: /api/* and /oauth2callback → localhost:3000
-│   ├── index.html
-│   ├── package.json
-│   └── tsconfig.json
+├── shared/                    # Shared evaluation logic used by demo/ and live/
+│   ├── prompts.ts             # 20 representative productivity prompts
+│   ├── trace.ts               # Color-coded side-by-side trace runner
+│   ├── benchmark.ts           # 20-prompt metrics table runner
+│   ├── agentLoop.ts           # Generic agentic loop (without-agent)
+│   ├── runWith.ts             # Generic with-agent runner (uses OneCallAnthropic)
+│   └── types.ts               # AgentRun + ToolCallRecord types
 ├── demo/
 │   ├── data/mock.ts           # Static WorkStateSnapshot + raw provider slices
 │   ├── agents/
 │   │   ├── without.ts         # Multi-turn agent with raw Gmail/Calendar/Notion tools
 │   │   └── with.ts            # Single-turn agent using OneCallAnthropic (0 tools)
-│   ├── prompts.ts             # 20 representative productivity prompts
-│   ├── trace.ts               # Single-prompt color-coded side-by-side trace
-│   └── benchmark.ts           # Sequential 20-prompt run → metrics table + summary
-├── live/                      # Live-data evaluation scripts
+│   ├── trace.ts               # Thin wrapper → shared/trace.ts
+│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
+├── live/                      # Live-data evaluation (requires server + credentials)
+│   ├── agents/
+│   │   ├── without.ts         # Multi-turn agent with real API calls
+│   │   └── with.ts            # Single-turn agent reading live SQLite snapshot
+│   ├── trace.ts               # Thin wrapper → shared/trace.ts
+│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
 ├── wiki/                      # Project documentation
 ├── .env.example
 ├── .gitignore
@@ -122,7 +122,7 @@ The centrepiece of the project. `OneCallAnthropic` extends the Anthropic SDK cli
 ```typescript
 export class OneCallAnthropic extends Anthropic {
   constructor(opts: ConstructorParameters<typeof Anthropic>[0] & {
-    snapshotGetter: () => WorkStateSnapshot | null;
+    snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
   }) { ... }
 
   protected override async prepareOptions(options: any): Promise<void> {
@@ -135,7 +135,7 @@ export class OneCallAnthropic extends Anthropic {
 
 The `snapshotGetter` parameter is injected at construction time:
 - **Demo/test:** `snapshotGetter: () => MOCK_SNAPSHOT`
-- **Production:** `snapshotGetter: readLatestSnapshot` (from `server/src/db/snapshot.ts`)
+- **Production:** `snapshotGetter: ensureFreshSnapshot` (from `server/src/sync/scheduler.ts`) — triggers a sync if the cached snapshot is stale
 
 `formatSnapshot()` renders the `WorkStateSnapshot` as structured plain text — more token-efficient than JSON and readable in demo terminal output.
 
@@ -196,7 +196,7 @@ For the hackathon, Notion is implemented. The interface ensures Linear and Todoi
 
 ### HTTP API (`server/src/api/server.ts`)
 
-The Express server runs on port 3000. In production it also serves `web/dist/` as static files. During development, Vite proxies `/api/*` and `/oauth2callback` to port 3000.
+The Express server runs on port 3000. It also serves a server-rendered HTML setup page at `/setup` for credential management.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -207,7 +207,7 @@ The Express server runs on port 3000. In production it also serves `web/dist/` a
 | `POST` | `/api/sync` | Trigger immediate sync (fire-and-forget) |
 | `GET` | `/api/auth/google` | `{ url }` — Google OAuth initiation URL |
 | `GET` | `/oauth2callback` | Handles Google OAuth redirect, exchanges code for tokens, redirects to `/` |
-| `GET` | `/*` | Serves `web/dist/index.html` (production only) |
+| `GET` | `/` | Redirects to `/setup` |
 
 ---
 
@@ -261,11 +261,19 @@ Keep only the last 10 snapshots. `readLatestSnapshot()` reads `SELECT snapshot F
 
 `syncAll()` calls each provider in parallel (`Promise.allSettled`), merges results into a `WorkStateSnapshot`, and writes to SQLite. Errors from individual providers are caught and written to `meta.errors` — a Gmail failure should not block calendar data from being saved.
 
+The scheduler uses **lazy caching** instead of a fixed polling interval. `ensureFreshSnapshot()` checks whether the cached snapshot is stale (>15 min default). If stale or missing, it triggers `syncAll()` before returning. This avoids unnecessary background polling.
+
 ```typescript
 // scheduler.ts
-cron.schedule('*/15 * * * *', async () => { await syncAll(); });
-syncAll(); // run once immediately on startup
+export async function ensureFreshSnapshot(maxAgeMs = 15 * 60 * 1000): Promise<WorkStateSnapshot | null> {
+  const cached = readLatestSnapshot();
+  if (cached && !isStale(cached, maxAgeMs)) return cached;
+  await syncAll();
+  return readLatestSnapshot();
+}
 ```
+
+Individual integrations can be toggled via `ENABLE_GMAIL`, `ENABLE_CALENDAR`, and `ENABLE_NOTION` environment variables (all default to `true`). The setup page allows users to select which integrations to enable.
 
 ---
 
@@ -312,24 +320,24 @@ PORT=3000
 
 ### package.json Layout
 
-The project uses **npm workspaces** with three packages (`harness`, `server`, `web`). The root `package.json` is the workspace root and provides orchestration scripts:
+The project uses **npm workspaces** with two packages (`harness`, `server`). The root `package.json` is the workspace root and provides orchestration scripts:
 
 ```json
 {
-  "workspaces": ["harness", "server", "web"],
+  "workspaces": ["harness", "server"],
   "scripts": {
-    "build": "npm run build -w harness && npm run build -w server && npm run build -w web",
+    "build": "npm run build -w harness && npm run build -w server",
     "start": "npm start -w server",
     "dev": "npm run dev -w server",
-    "demo:trace": "tsx demo/trace.ts",
-    "demo:benchmark": "tsx demo/benchmark.ts",
-    "live:trace": "tsx live/trace.ts",
-    "live:benchmark": "tsx live/benchmark.ts"
+    "demo:trace": "npm run build:harness && tsx demo/trace.ts",
+    "demo:benchmark": "npm run build:harness && tsx demo/benchmark.ts",
+    "live:trace": "npm run build:harness && tsx live/trace.ts",
+    "live:benchmark": "npm run build:harness && tsx live/benchmark.ts"
   }
 }
 ```
 
-Server dependencies (`server/package.json`) include Express, SQLite, Google APIs, Notion, and `@onecall/harness`.
+Server dependencies (`server/package.json`) include Express, SQLite, Google APIs, Notion, and `@onecall/harness`. The `shared/` directory contains loose TypeScript files imported via relative paths by both `demo/` and `live/`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Architecture
 
-OneCall has two layers that work together to eliminate tool-call overhead from productivity agents.
+OneCall has three layers that work together to eliminate tool-call overhead from productivity agents.
 
 ---
 
@@ -10,8 +10,10 @@ OneCall has two layers that work together to eliminate tool-call overhead from p
                        ┌─────────────────────────────────────────┐
                        │           Layer 1: Background Sync      │
                        │                                         │
-                       │   node-cron (every 15 min)              │
+                       │   ensureFreshSnapshot()                 │
                        │       │                                 │
+                       │   cache stale?  ──no──→  return cached  │
+                       │       │ yes                              │
                        │       ▼                                 │
                        │   syncAll()                             │
                        │       │                                 │
@@ -43,20 +45,31 @@ OneCall has two layers that work together to eliminate tool-call overhead from p
                        │  Request sent to Anthropic API          │
                        │  (with work context already in prompt)  │
                        └─────────────────────────────────────────┘
+
+                       ┌─────────────────────────────────────────┐
+                       │        Layer 3: HTTP API + Setup        │
+                       │                                         │
+                       │  Express server on port 3000            │
+                       │    /setup      → credential entry UI    │
+                       │    /api/*      → REST endpoints         │
+                       │    /oauth2callback → Google OAuth       │
+                       └─────────────────────────────────────────┘
 ```
 
 ---
 
 ## Layer 1: Background Sync
 
-A `node-cron` loop polls Gmail, Google Calendar, and Notion every 15 minutes (configurable via `SYNC_INTERVAL_MINUTES`). Each provider is called in parallel using `Promise.allSettled`, so a failure in one provider does not block the others.
+Uses **lazy caching** via `ensureFreshSnapshot()`: syncs only fire when a snapshot is requested and the cache is stale (>15 min default). Each provider is called in parallel using `Promise.allSettled`, so a failure in one provider does not block the others.
 
 Results are merged into a single [`WorkStateSnapshot`](Data-Types.md) and persisted to a local SQLite database. Only the last 10 snapshots are retained.
 
+Individual integrations can be toggled via `ENABLE_GMAIL`, `ENABLE_CALENDAR`, and `ENABLE_NOTION` environment variables.
+
 **Key files:**
-- `src/sync/scheduler.ts` — cron scheduling and startup sync
-- `src/sync/syncAll.ts` — orchestrates parallel provider fetches
-- `src/providers/` — individual provider implementations
+- `server/src/sync/scheduler.ts` — lazy cache: `ensureFreshSnapshot()`
+- `server/src/sync/syncAll.ts` — orchestrates parallel provider fetches
+- `server/src/providers/` — individual provider implementations
 
 See [Background Sync](Background-Sync.md) for details.
 
@@ -73,9 +86,20 @@ On every `POST /v1/messages` request, the override:
 
 The calling code passes no tools and no system prompt — injection is invisible to the application layer.
 
-**Key file:** `src/client.ts`
+**Key file:** `harness/src/client.ts`
 
 See [Harness Injection](Harness-Injection.md) for details.
+
+---
+
+## Layer 3: HTTP API + Setup Page
+
+An Express server on port 3000 exposes REST endpoints for status, config, snapshot, sync, and auth. It also serves a server-rendered HTML setup page at `/setup` for credential management and Google OAuth.
+
+**Key files:**
+- `server/src/api/server.ts` — Express routes
+- `server/src/api/setup.ts` — server-rendered HTML setup page
+- `server/src/api/config.ts` — credential validation + `.env` writing
 
 ---
 

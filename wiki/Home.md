@@ -21,7 +21,7 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 | Page | Description |
 |------|-------------|
-| [Architecture](Architecture.md) | Two-layer design: background sync + harness injection |
+| [Architecture](Architecture.md) | Three-layer design: background sync + harness injection + setup page |
 | [Harness Injection](Harness-Injection.md) | Deep dive into `OneCallAnthropic` and `prepareOptions` |
 | [Data Types](Data-Types.md) | `WorkStateSnapshot` and all sub-interfaces |
 | [Providers](Providers.md) | Gmail, Google Calendar, and Notion integrations |

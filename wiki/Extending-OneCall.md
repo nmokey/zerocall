@@ -6,7 +6,7 @@ OneCall is designed to be extensible. The `TaskProvider` interface makes adding 
 
 ## Adding a New Task Provider
 
-The `TaskProvider` interface (in `src/providers/types.ts`) defines the contract:
+The `TaskProvider` interface (in `server/src/providers/types.ts`) defines the contract:
 
 ```typescript
 interface TaskProvider {
@@ -21,7 +21,7 @@ interface TaskProvider {
 
 ### Step 1: Add the Provider Name to the Union Type
 
-Update `src/providers/types.ts` to include the new source name:
+Update `server/src/providers/types.ts` to include the new source name:
 
 ```typescript
 // Before
@@ -31,7 +31,7 @@ name: 'notion' | 'linear' | 'todoist';
 name: 'notion' | 'linear' | 'todoist' | 'your_source';
 ```
 
-Also update the `Task.source` union in `src/types/snapshot.ts`:
+Also update the `Task.source` union in `harness/src/types.ts`:
 
 ```typescript
 // Before
@@ -43,11 +43,11 @@ source: 'notion' | 'linear' | 'todoist' | 'your_source';
 
 ### Step 2: Implement the Provider
 
-Create `src/providers/your_source.ts`:
+Create `server/src/providers/your_source.ts`:
 
 ```typescript
 import type { TaskProvider } from './types.js';
-import type { Task } from '../types/snapshot.js';
+import type { Task } from '@onecall/harness';
 
 export class YourSourceProvider implements TaskProvider {
   name = 'your_source' as const;
@@ -88,7 +88,7 @@ export class YourSourceProvider implements TaskProvider {
 
 ### Step 3: Wire It Into syncAll
 
-Update `src/sync/syncAll.ts` to include the new provider in the parallel fetch:
+Update `server/src/sync/syncAll.ts` to include the new provider in the parallel fetch:
 
 ```typescript
 import { YourSourceProvider } from '../providers/your_source.js';
@@ -132,7 +132,7 @@ If you need to add a new data category beyond calendar, email, and tasks (e.g., 
 
 ### 1. Extend WorkStateSnapshot
 
-Add the new section to `src/types/snapshot.ts`:
+Add the new section to `harness/src/types.ts`:
 
 ```typescript
 interface WorkStateSnapshot {
@@ -147,7 +147,7 @@ interface WorkStateSnapshot {
 
 ### 2. Add a Provider
 
-Create the provider in `src/providers/`.
+Create the provider in `server/src/providers/`.
 
 ### 3. Update syncAll
 
@@ -155,7 +155,7 @@ Add the provider to the `Promise.allSettled` call.
 
 ### 4. Update formatSnapshot
 
-Add a new section to `formatSnapshot()` in `src/client.ts` so the data appears in the injected context:
+Add a new section to `formatSnapshot()` in `harness/src/client.ts` so the data appears in the injected context:
 
 ```typescript
 if (s.slack) {

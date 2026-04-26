@@ -10,14 +10,14 @@ The harness is the centrepiece of OneCall. It intercepts every outgoing Anthropi
 
 ```typescript
 import Anthropic from '@anthropic-ai/sdk';
-import type { WorkStateSnapshot } from './types/snapshot.js';
+import type { WorkStateSnapshot } from './types.js';
 
 export class OneCallAnthropic extends Anthropic {
-  private readonly snapshotGetter: () => WorkStateSnapshot | null;
+  private readonly snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
 
   constructor(
     opts: ConstructorParameters<typeof Anthropic>[0] & {
-      snapshotGetter: () => WorkStateSnapshot | null;
+      snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
     }
   ) {
     const { snapshotGetter, ...anthropicOpts } = opts;
@@ -32,7 +32,7 @@ export class OneCallAnthropic extends Anthropic {
     const body = options.body;
     if (typeof body !== 'object' || body === null || Array.isArray(body)) return;
 
-    const snapshot = this.snapshotGetter();
+    const snapshot = await Promise.resolve(this.snapshotGetter());
     if (!snapshot) return;
 
     // Handle string | undefined; leave TextBlockParam[] untouched
@@ -69,8 +69,8 @@ The snapshot source is injected at construction time, decoupling the harness fro
 | Context | snapshotGetter |
 |---------|---------------|
 | Demo/testing | `() => MOCK_SNAPSHOT` |
-| Production | `readLatestSnapshot` (from `src/db/snapshot.ts`) |
-| Live evaluation | `() => { const s = readLatestSnapshot(); if (!s) throw ...; return s; }` |
+| Production | `ensureFreshSnapshot` (from `server/src/sync/scheduler.ts`) — triggers sync if cache is stale |
+| Live evaluation | `ensureFreshSnapshot` or `() => { const s = readLatestSnapshot(); if (!s) throw ...; return s; }` |
 
 ---
 
