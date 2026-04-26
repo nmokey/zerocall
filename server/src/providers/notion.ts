@@ -13,11 +13,19 @@ export class NotionProvider implements TaskProvider {
   }
 
   async getTasks(): Promise<{ overdue: Task[]; due_today: Task[]; in_progress: Task[] }> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await (this.client as any).search({
-      filter: { value: 'page', property: 'object' },
-      sort: { direction: 'descending', timestamp: 'last_edited_time' },
-      page_size: 100,
+    // Use raw request to POST /databases/{id}/query — the typed databases.query()
+    // was removed in the current SDK, but the REST endpoint is still supported and
+    // is the only way to scope results to a specific database.
+    const response = await this.client.request<{
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results: Array<{ id: string; object: string; properties: Record<string, any>; url?: string }>;
+    }>({
+      path: `databases/${this.databaseId}/query`,
+      method: 'post',
+      body: {
+        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+        page_size: 100,
+      },
     });
 
     const overdue: Task[] = [];
@@ -28,15 +36,14 @@ export class NotionProvider implements TaskProvider {
 
     for (const page of response.results) {
       if (page.object !== 'page') continue;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const props = (page as any).properties as Record<string, any>;
+      const props = page.properties;
 
       const title = extractTitle(props);
       if (!title) continue;
 
       const due = extractDate(props);
       const status = extractStatus(props);
-      const url = (page as { url?: string }).url;
+      const url = page.url;
 
       const task: Task = {
         id: page.id,

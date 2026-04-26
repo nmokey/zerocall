@@ -119,6 +119,7 @@ export default function Setup({ onDone }: Props) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([getStatus(), getConfig()]).then(([s, c]) => {
@@ -139,18 +140,29 @@ export default function Setup({ onDone }: Props) {
 
   function setField(key: string, val: string) {
     setFields(f => ({ ...f, [key]: val }));
+    setDirty(d => new Set(d).add(key));
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
-    const nonEmpty = Object.fromEntries(Object.entries(fields).filter(([, v]) => v.trim()));
+    const nonEmpty = Object.fromEntries(Object.entries(fields).filter(([k, v]) => v.trim() && dirty.has(k)));
     try {
       await postConfig(nonEmpty);
       const [s, c] = await Promise.all([getStatus(), getConfig()]);
       setStatus(s);
       setConfig(c);
+      if (c.values) {
+        setFields({
+          GOOGLE_CLIENT_ID: c.values.GOOGLE_CLIENT_ID || '',
+          GOOGLE_CLIENT_SECRET: c.values.GOOGLE_CLIENT_SECRET || '',
+          NOTION_TOKEN: c.values.NOTION_TOKEN || '',
+          NOTION_DATABASE_ID: c.values.NOTION_DATABASE_ID || '',
+          ANTHROPIC_API_KEY: c.values.ANTHROPIC_API_KEY || '',
+        });
+      }
+      setDirty(new Set());
       const count = Object.keys(nonEmpty).length;
       setMessage({ type: 'success', text: `Settings saved · ${count} field${count !== 1 ? 's' : ''} written` });
       if (s.configured && s.authenticated) onDone();

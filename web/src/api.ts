@@ -25,7 +25,7 @@ export interface ApiConfig {
   values: Record<string, string>;
   integrations: {
     gmail: boolean;
-    gcal: boolean;
+    calendar: boolean;
     notion: boolean;
   };
 }
