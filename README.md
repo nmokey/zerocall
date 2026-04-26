@@ -25,9 +25,9 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 ## How It Works
 
-### Layer 1: Background sync
+### Layer 1: Lazy-cached sync
 
-OneCall runs a background sync every 15 minutes (configurable), polling Gmail, Google Calendar, and Notion in parallel using their REST APIs directly — no LLM involved. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database.
+OneCall fetches Gmail, Google Calendar, and Notion in parallel using their REST APIs — no LLM involved. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database. Syncing is **lazy**: the server only fetches from sources when a snapshot is requested and the cache is stale (default: 15 minutes). There is no background polling loop.
 
 ### Layer 2: Harness-level injection
 
@@ -97,13 +97,6 @@ If the browser OAuth flow doesn't work, use the CLI alternative:
 npm run auth:google
 ```
 
-Once connected, the first sync runs immediately:
-
-```
-[scheduler] polling every 15 minutes
-[sync] done in 22547ms — sources: gmail, gcal, notion
-```
-
 ---
 
 ## Development
@@ -112,49 +105,6 @@ Once connected, the first sync runs immediately:
 npm run dev        # server in watch/reload mode
 npm run dev:web    # Vite dev server with HMR (proxies /api/* to port 3000)
 ```
-
----
-
-## Injected Context Format
-
-The snapshot is rendered as a compact plain-text block before injection:
-
-```
---- ONECALL WORK CONTEXT (as of 2026-04-24T09:00:00Z) ---
-
-[CALENDAR TODAY]
-  • 10:00–11:00  Arvind Lab Meeting  (Boelter 4760)  https://zoom.us/j/123456789
-  • 14:00–15:30  CS 269 Lecture  (Franz Hall 1178)
-  • 16:00–16:30  Research sync w/ Sarah
-
-[FREE BLOCKS TODAY]
-  09:00–10:00 (60 min), 11:00–14:00 (180 min), 15:30–16:00 (30 min)
-
-[UPCOMING DEADLINES]
-  • 2026-04-26  CS 269 Project Proposal Due
-  • 2026-04-28  Deadline: ICML submission
-
-[EMAIL — ACTION REQUIRED]
-  • Arvind Kumar <arvind@cs.ucla.edu>: "Action items from today's lab meeting" — ...
-  • Sarah Chen <sarah@cs.ucla.edu>: "Re: ICML submission — author list" — ...
-
-[EMAIL — AWAITING REPLY]
-  • HPC Support (waiting since 2026-04-22): "GPU cluster access request"
-  Total unread: 14
-
-[TASKS — OVERDUE]
-  • Write related work section for ICML draft (due 2026-04-22)
-
-[TASKS — DUE TODAY]
-  • Set up eval pipeline for benchmark suite
-
-[TASKS — IN PROGRESS]
-  • Implement attention visualization module
-
---- END ONECALL CONTEXT ---
-```
-
-Sections disabled by the Adaptive System Prompt Manager are omitted entirely — no placeholder, no header.
 
 ---
 
@@ -175,172 +125,18 @@ The `demo/` directory contains evaluation scripts that use **mocked provider dat
 ```bash
 npm run demo:trace                                       # default prompt
 npm run demo:trace -- p04                                # by prompt ID
-npm run demo:trace -- 7                                  # by number (1–20)
 npm run demo:trace -- --prompt "Am I free at 3pm?"       # custom prompt
 npm run demo:benchmark                                   # all 20 prompts
 npm run demo:adaptive                                    # adaptive optimization demo
 ```
 
-Sample benchmark output:
+### Live evaluation
 
-```
-WITHOUT OneCall  (raw tool calls)
-  1. gmail_search_threads  1ms
-  2. calendar_list_events  0ms
-  3. gmail_get_thread       0ms
-  4. notion_query_database  0ms
-
-  Total: 19424ms   Tokens: 7152   Tool calls: 5   LLM turns: 3
-
-WITH OneCall  (harness injection)
-  ✦ Work context auto-injected into system prompt
-  (0 tool calls — harness injected the snapshot before first token)
-
-  Total: 6318ms   Tokens: 872   Tool calls: 0   LLM turns: 1
-
-  Tool calls:  5 → 0  (100% fewer)
-  LLM turns:   3 → 1  (67% fewer)
-  Latency:     19424ms → 6318ms  (67% faster)
-  Tokens:      7152 → 872  (88% fewer)
-```
-
-### Adaptive demo (`demo:adaptive`)
-
-Runs 15 prompts (calendar/task-heavy) through OneCall twice:
-
-1. **Phase 1** — all sections enabled; queries are classified and logged in memory
-2. **Analysis** — computes per-section relevance from specific-category queries only; suggests disabling email (8% relevance, below the 15% threshold)
-3. **Phase 2** — same prompts with email section disabled; tokens drop
-
-```
-ADAPTIVE OPTIMIZATION RESULTS
-  Disabled sections:     email (relevance < 15%)
-  Avg tokens — Phase 1:  ~900 tokens/query  (all sections)
-  Avg tokens — Phase 2:  ~720 tokens/query  (optimized)
-  Token reduction:        ~20%
-  The system learned your workflow. Same answers, 20% leaner.
-```
-
----
-
-## Live Evaluation
-
-The `live/` directory runs the same trace and benchmark against your **real** Gmail, Google Calendar, and Notion data.
-
-**Prerequisites:** credentials configured, `npm start` run at least once so the SQLite snapshot is populated.
+The `live/` directory runs the same trace and benchmark against your **real** Gmail, Google Calendar, and Notion data. Requires credentials configured and `npm start` run at least once so the SQLite snapshot is populated.
 
 ```bash
 npm run live:trace -- --prompt "What should I focus on today?"
 npm run live:benchmark
-```
-
-The `without` agent makes live API calls on each run. The `with` agent reads from the local snapshot (sub-millisecond). Live queries are also logged to the `query_log` table, which feeds the Adaptive Optimization panel in the dashboard.
-
----
-
-## npm Scripts Reference
-
-| Command | What it does |
-|---|---|
-| `npm install` | Install all deps + link workspace packages |
-| `npm run build` | Compile harness + server + web |
-| `npm run build:harness` | Compile harness only |
-| `npm run build:server` | Compile server only |
-| `npm run build:web` | Compile web only |
-| `npm start` | Run the server (`http://localhost:3000`) |
-| `npm run dev` | Server in watch/reload mode |
-| `npm run dev:web` | Vite dev server with HMR |
-| `npm run auth:google` | CLI OAuth flow — writes `server/tokens.json` |
-| `npm run demo:trace` | Mock-data side-by-side trace |
-| `npm run demo:benchmark` | Mock-data 20-prompt benchmark |
-| `npm run demo:adaptive` | Adaptive optimization two-phase demo |
-| `npm run live:trace` | Live-data side-by-side trace |
-| `npm run live:benchmark` | Live-data 20-prompt benchmark |
-
-**When to rebuild:**
-
-| Situation | Command |
-|---|---|
-| First clone | `npm run build` |
-| Changed `harness/src/` | `npm run build:harness` (demo/live scripts do this automatically) |
-| Changed `server/src/` | `npm run build:server`, then `npm start` |
-| Changed `web/src/` | `npm run build:web` (or use `npm run dev:web`) |
-| Changed both | `npm run build` |
-
----
-
-## Repository Structure
-
-```
-onecall/
-├── harness/                   # @onecall/harness — npm workspace package
-│   └── src/
-│       ├── client.ts          # OneCallAnthropic — prepareOptions injection + filterSnapshot
-│       ├── types.ts           # WorkStateSnapshot and all sub-interfaces
-│       └── index.ts           # Package entry point (re-exports)
-├── server/                    # Background sync + Express API — npm workspace package
-│   ├── src/
-│   │   ├── main.ts            # Entry point — DB init, scheduler, HTTP server
-│   │   ├── env.ts             # Loads .env relative to server root
-│   │   ├── api/
-│   │   │   ├── server.ts      # Express routes (/api/*, /oauth2callback, SPA fallback)
-│   │   │   ├── config.ts      # Credential validation + .env writing
-│   │   │   └── setup.ts       # (legacy) server-rendered HTML setup page
-│   │   ├── auth/
-│   │   │   └── google.ts      # OAuth2 flow, token persistence, auto-refresh
-│   │   ├── db/
-│   │   │   ├── client.ts      # better-sqlite3 singleton
-│   │   │   ├── schema.ts      # Table creation on startup
-│   │   │   ├── snapshot.ts    # Read/write WorkStateSnapshot + sync logging
-│   │   │   ├── queryLog.ts    # Query logging + intent classification
-│   │   │   └── adaptiveConfig.ts  # Per-section enable/disable flags
-│   │   ├── analytics/
-│   │   │   └── suggestions.ts # Section relevance scoring + disable suggestions
-│   │   ├── providers/
-│   │   │   ├── types.ts       # TaskProvider interface
-│   │   │   ├── gmail.ts       # Gmail API — thread classification
-│   │   │   ├── calendar.ts    # Google Calendar API — events + free blocks
-│   │   │   └── notion.ts      # Notion API — task binning by due date/status
-│   │   ├── sync/
-│   │   │   ├── syncAll.ts     # Parallel provider fetch → snapshot → SQLite
-│   │   │   └── scheduler.ts   # node-cron loop + startup sync + lazy cache
-│   │   └── trace/
-│   │       ├── agents.ts      # runWithoutOneCall + runWithOneCall (live API)
-│   │       └── runner.ts      # runTraceComparison — parallel run → TraceResult
-│   └── tokens.json            # Google OAuth tokens (gitignored, written by auth flow)
-├── web/                       # Vite + React frontend — npm workspace package
-│   └── src/
-│       ├── App.tsx            # Routes to Setup or Dashboard based on /api/status
-│       ├── api.ts             # Typed fetch wrappers for all /api/* endpoints
-│       └── pages/
-│           ├── Setup.tsx      # Credential entry + Google OAuth
-│           └── Trace.tsx      # Side-by-side trace runner (calls POST /api/trace)
-├── shared/                    # Shared logic used by demo/ and live/
-│   ├── trace.ts               # Color-coded side-by-side trace runner
-│   ├── benchmark.ts           # 20-prompt metrics table runner
-│   ├── agentLoop.ts           # Generic agentic loop (without-agent)
-│   ├── runWith.ts             # Generic with-agent runner (uses OneCallAnthropic)
-│   ├── prompts.ts             # 20 representative productivity prompts
-│   └── types.ts               # AgentRun + ToolCallRecord types
-├── demo/                      # Mock-data evaluation (no credentials needed)
-│   ├── data/mock.ts           # Realistic static WorkStateSnapshot + raw slices
-│   ├── agents/
-│   │   ├── without.ts         # Multi-turn agent with raw tools (mock responses)
-│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock snapshot)
-│   ├── adaptive-benchmark.ts  # Two-phase adaptive optimization demo
-│   ├── trace.ts               # Thin wrapper → shared/trace.ts
-│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
-├── live/                      # Live-data evaluation (requires server + credentials)
-│   ├── agents/
-│   │   └── with.ts            # Re-exports runWithOneCall from server/src/trace/agents
-│   ├── trace.ts               # Thin wrapper → shared/trace.ts
-│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
-├── scripts/
-│   └── google-auth.ts         # CLI OAuth flow for terminal-only environments
-├── .env                       # Credentials (gitignored)
-├── .env.example
-├── package.json               # Workspace root — orchestration scripts only
-└── CLAUDE.md
 ```
 
 ---
