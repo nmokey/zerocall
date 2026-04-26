@@ -1,4 +1,6 @@
 # OneCall
+![Railway](https://img.shields.io/badge/Railway-deployed-brightgreen?logo=railway)
+![Devin](https://img.shields.io/badge/made_with-Devin-blue)
 
 **Your AI assistant reads the room before you ask.**
 
@@ -142,5 +144,8 @@ npm run live:benchmark
 ---
 
 ## Built at LA Hacks 2026
-
+<a href="https://github.com/nmokey/onecall/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=nmokey/onecall" />
+</a>
+  
 Targeting the **Flicker to Flow** (Figma) and **Augment the Agent** (Cognition) tracks.
