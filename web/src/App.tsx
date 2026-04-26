@@ -47,7 +47,7 @@ export default function App() {
   if (appState === 'loading') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: T.bg, color: T.muted, fontSize: '0.9rem', transition: 'background 0.3s, color 0.3s' }}>
-        Loading...
+        Loading\u2026
       </div>
     );
   }
