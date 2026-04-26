@@ -527,6 +527,14 @@ export default function Trace({ T }: { T: Theme }) {
   }, []);
 
   async function handleToggle(section: string, enabled: boolean) {
+    // Optimistically update currentConfig so the bar chart never flickers — the
+    // query counts come from the local query log and are unaffected by config changes.
+    setAdaptiveStats(prev => prev ? {
+      ...prev,
+      currentConfig: { ...prev.currentConfig, [section]: enabled },
+      // Clear any suggestion for this section immediately so the banner disappears.
+      suggestions: prev.suggestions.filter(s => s.section !== section),
+    } : prev);
     try {
       await applyAdaptiveSection(section, enabled);
       await refreshAdaptiveStats();
