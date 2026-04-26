@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { runTrace, type AgentRun, type TraceResult } from '../api';
 
 const T = {
@@ -59,7 +60,7 @@ function MetricsBarGraph({ result }: { result: TraceResult }) {
   }
 
   return (
-    <div style={{ marginBottom: 48, padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, maxWidth: 550, margin: '0 auto' }}>
+    <div style={{ marginBottom: 64, padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, maxWidth: 550, margin: '0 auto' }}>
       <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 16 }}>Metrics comparison</div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 16 }}>
         {metrics.map(metric => {
@@ -132,8 +133,8 @@ function AgentPanel({ label, run, accent }: { label: string; run: AgentRun; acce
       {/* Response */}
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 10 }}>Response</div>
-        <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65, whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
-          {run.finalResponse}
+        <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65 }}>
+          <ReactMarkdown>{run.finalResponse}</ReactMarkdown>
         </div>
       </div>
 
