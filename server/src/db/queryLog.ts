@@ -9,14 +9,17 @@ export interface QueryLogRow {
   category: QueryCategory;
 }
 
-const CALENDAR_KEYWORDS = ['free', 'meeting', 'schedule', 'calendar', 'available', 'busy', 'block', 'event', 'am i', 'when', 'today', 'tomorrow', 'afternoon', 'morning', 'time', '3pm', '2pm', '1pm', 'noon', 'standup', 'sync'];
-const EMAIL_KEYWORDS = ['email', 'reply', 'message', 'inbox', 'waiting', 'sent', 'thread', 'responded', 'hear back', 'follow up', 'unread', 'inbox'];
-const TASKS_KEYWORDS = ['task', 'todo', 'overdue', 'deadline', 'due', 'blocked', 'in progress', 'notion', 'work on', 'finish', 'complete', 'priority', 'urgent', 'submission', 'deliverable'];
+// Strong-signal keywords only — each list should only fire for queries that
+// unambiguously belong to that section. Avoid temporal words ('today',
+// 'tomorrow', 'morning') that appear in queries about any section.
+const CALENDAR_KEYWORDS = ['meeting', 'schedule', 'calendar', 'available', 'busy', 'free block', 'am i free', 'on my calendar', 'event', '3pm', '2pm', '1pm', 'noon', 'rest of the day', 'this afternoon', 'free at'];
+const EMAIL_KEYWORDS = ['email', 'reply', 'replied', 'message', 'inbox', 'waiting', 'sent', 'thread', 'responded', 'hear back', 'follow up', 'unread'];
+const TASKS_KEYWORDS = ['task', 'todo', 'overdue', 'deadline', 'due today', 'in progress', 'blocking', 'notion', 'finish', 'deliverable', 'submission'];
 
 /**
  * Classifies a query into a section category using keyword heuristics.
  * No LLM call — purely lexical matching on lowercased prompt text.
- * Scores each category by keyword hits; ties go to 'general'.
+ * Uses strong-signal keywords only; ties and no-match both return 'general'.
  *
  * @param text - The user's raw query string.
  * @returns The most likely category.
@@ -34,11 +37,14 @@ export function classifyQuery(text: string): QueryCategory {
     general: 0,
   };
 
-  const best = (Object.entries(scores) as [QueryCategory, number][])
-    .filter(([k]) => k !== 'general')
-    .reduce((a, b) => (b[1] > a[1] ? b : a), ['general', -1] as [QueryCategory, number]);
+  const specific = (Object.entries(scores) as [QueryCategory, number][]).filter(([k]) => k !== 'general');
+  const maxScore = Math.max(...specific.map(([, v]) => v));
 
-  return best[1] > 0 ? best[0] : 'general';
+  // Ties and zero scores both map to 'general' — ambiguous queries should not
+  // inflate relevance for any specific section.
+  if (maxScore === 0) return 'general';
+  const winners = specific.filter(([, v]) => v === maxScore);
+  return winners.length === 1 ? winners[0][0] : 'general';
 }
 
 /**

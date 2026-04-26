@@ -25,14 +25,15 @@ const MIN_QUERIES_FOR_SUGGESTION = 5;
 const SUGGESTION_THRESHOLD = 0.15;
 
 /**
- * Maps query categories to the snapshot sections they require.
- * 'general' queries are assumed to need all sections.
+ * Maps specific query categories to the snapshot section they signal a need for.
+ * 'general' queries are excluded — they don't signal any particular section need
+ * and must not inflate relevance scores for sections that aren't truly needed.
  */
-const CATEGORY_NEEDS: Record<string, Array<keyof SectionConfig>> = {
-  calendar: ['calendar'],
-  email: ['email'],
-  tasks: ['tasks'],
-  general: ['calendar', 'email', 'tasks'],
+const CATEGORY_SIGNALS: Partial<Record<string, keyof SectionConfig>> = {
+  calendar: 'calendar',
+  email: 'email',
+  tasks: 'tasks',
+  // 'general' intentionally absent
 };
 
 /**
@@ -90,22 +91,24 @@ export function computeAdaptiveStats(): AdaptiveStats {
 
   const total = queries.length;
 
-  // For each section, compute what fraction of queries needed it
+  // Only count specific queries (calendar/email/tasks) — general queries don't
+  // signal a need for any particular section and must not inflate scores.
+  const specificQueries = queries.filter(q => q.category !== 'general');
+  const specificTotal = specificQueries.length;
+
+  // For each section, relevance = fraction of specific queries that signal it.
+  // Defaults to 1 (fully relevant) when there's no specific signal data yet.
   const sectionRelevance: Record<string, number> = { calendar: 1, email: 1, tasks: 1 };
-  if (total > 0) {
+  if (specificTotal > 0) {
     for (const section of ['calendar', 'email', 'tasks'] as Array<keyof SectionConfig>) {
-      let needed = 0;
-      for (const q of queries) {
-        const needs = CATEGORY_NEEDS[q.category] ?? CATEGORY_NEEDS.general;
-        if (needs.includes(section)) needed++;
-      }
-      sectionRelevance[section] = needed / total;
+      const needed = specificQueries.filter(q => CATEGORY_SIGNALS[q.category] === section).length;
+      sectionRelevance[section] = needed / specificTotal;
     }
   }
 
   const suggestions: AdaptiveSuggestion[] = [];
 
-  if (total >= MIN_QUERIES_FOR_SUGGESTION) {
+  if (total >= MIN_QUERIES_FOR_SUGGESTION && specificTotal >= MIN_QUERIES_FOR_SUGGESTION) {
     for (const section of ['calendar', 'email', 'tasks'] as Array<keyof SectionConfig>) {
       // Only suggest disabling sections that are currently enabled
       if (!currentConfig[section]) continue;

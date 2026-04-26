@@ -17,9 +17,9 @@ import type { SectionConfig } from '@onecall/harness';
 import { MOCK_SNAPSHOT } from './data/mock.js';
 import { classifyQuery, type QueryCategory } from '../server/src/db/queryLog.js';
 
-// Skewed prompt set: calendar/task-heavy to simulate a user who rarely asks
-// about email. 3 out of 15 are email-focused (20%), below the 15% threshold
-// for one category after the classifier runs. Adjust to taste for demos.
+// Skewed prompt set simulating a user whose workflow is calendar + task heavy
+// with almost no email queries. 1 out of 12 specific-category queries is email
+// (~8%), well below the 15% suggestion threshold — so email gets flagged.
 const ADAPTIVE_PROMPTS = [
   { id: 'a01', text: 'What meetings do I have today?' },
   { id: 'a02', text: 'Am I free at 3pm today?' },
@@ -29,13 +29,13 @@ const ADAPTIVE_PROMPTS = [
   { id: 'a06', text: "What deadlines do I have coming up this week?" },
   { id: 'a07', text: 'What tasks are in progress?' },
   { id: 'a08', text: "What's on my calendar for the rest of the day?" },
-  { id: 'a09', text: 'Did Sarah reply to me?' },         // email
-  { id: 'a10', text: 'What emails need my attention today?' }, // email
-  { id: 'a11', text: 'What should I focus on right now?' },
-  { id: 'a12', text: 'What are my action items from Arvind\'s lab?' },
-  { id: 'a13', text: 'Is there anything blocking the ICML submission?' },
-  { id: 'a14', text: 'How should I prioritize the next two hours?' },
-  { id: 'a15', text: 'Give me a quick standup summary.' },
+  { id: 'a09', text: 'Did Sarah reply to me?' },         // only email query
+  { id: 'a10', text: 'What should I focus on right now?' },
+  { id: 'a11', text: 'What are my action items from Arvind\'s lab?' },
+  { id: 'a12', text: 'Is there anything blocking the ICML submission?' },
+  { id: 'a13', text: 'How should I prioritize the next two hours?' },
+  { id: 'a14', text: 'Am I free this morning for deep work?' },
+  { id: 'a15', text: 'What tasks are in progress right now?' },
 ];
 
 const SUGGESTION_THRESHOLD = 0.15;
@@ -103,25 +103,20 @@ async function runPhase(
   return results;
 }
 
-/** Computes per-section relevance from the query log. */
+/**
+ * Computes per-section relevance from the query log.
+ * Only specific queries (calendar/email/tasks) contribute — general queries
+ * don't signal a need for any particular section and are excluded from the
+ * denominator so they can't inflate scores for sections not truly needed.
+ */
 function computeRelevance(log: { category: QueryCategory }[]): Record<string, number> {
-  if (log.length === 0) return { calendar: 1, email: 1, tasks: 1 };
-  const total = log.length;
-  const NEEDS: Record<QueryCategory, Array<keyof SectionConfig>> = {
-    calendar: ['calendar'],
-    email: ['email'],
-    tasks: ['tasks'],
-    general: ['calendar', 'email', 'tasks'],
-  };
-  const relevance: Record<string, number> = { calendar: 0, email: 0, tasks: 0 };
-  for (const q of log) {
-    const needs = NEEDS[q.category];
-    for (const s of needs) relevance[s]++;
-  }
+  const specific = log.filter(q => q.category !== 'general');
+  if (specific.length === 0) return { calendar: 1, email: 1, tasks: 1 };
+  const total = specific.length;
   return {
-    calendar: relevance.calendar / total,
-    email: relevance.email / total,
-    tasks: relevance.tasks / total,
+    calendar: specific.filter(q => q.category === 'calendar').length / total,
+    email: specific.filter(q => q.category === 'email').length / total,
+    tasks: specific.filter(q => q.category === 'tasks').length / total,
   };
 }
 
