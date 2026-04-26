@@ -73,7 +73,9 @@ function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; 
             }}
           />
         </div>
-        <span className={styles.barSublabel}>{sublabel}</span>
+        <div className={styles.barSublabelWrap}>
+          <span className={styles.barSublabel}>{sublabel}</span>
+        </div>
       </div>
     );
   }
@@ -88,8 +90,8 @@ function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; 
             <div key={m.label} className={styles.barMetricGroup}>
               <div className={styles.barMetricLabel}>{m.label}</div>
               <div className={styles.barPair}>
-                <Bar value={m.without} max={max} accent="without" sublabel="Without" />
-                <Bar value={m.with}    max={max} accent="with"    sublabel="With" />
+                <Bar value={m.without} max={max} accent="without" sublabel="Raw" />
+                <Bar value={m.with}    max={max} accent="with"    sublabel="ZeroCall" />
               </div>
             </div>
           );
@@ -165,8 +167,7 @@ function AgentPanel({ label, agent, run, liveToolCalls = [], waiting = false }: 
     return (
       <div className={styles.agentPanel}>
         <div className={styles.panelHeader} style={{ borderBottom: `3px solid ${accentVar}` }}>
-          <div className={styles.panelTitle} style={{ color: accentVar, flex: 1 }}>{label}</div>
-          <Spinner size={13} />
+          <div className={styles.panelTitle} style={{ color: accentVar }}>{label}</div>
         </div>
         <div className={styles.panelSection}>
           <ToolCallList calls={liveToolCalls} inProgress={true} />
