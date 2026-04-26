@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import type { CalendarEvent, TimeBlock } from '@zerocall/harness';
+import { startOfLocalDay, endOfLocalDay, localTimeOnDay } from '@zerocall/harness';
 
 export async function fetchCalendarState(auth: OAuth2Client): Promise<{
   today: CalendarEvent[];
@@ -10,10 +11,8 @@ export async function fetchCalendarState(auth: OAuth2Client): Promise<{
   const calendar = google.calendar({ version: 'v3', auth });
 
   const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
+  const startOfToday = startOfLocalDay(now);
+  const endOfToday = endOfLocalDay(now);
   const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const [todayRes, deadlineRes] = await Promise.all([
@@ -37,8 +36,8 @@ export async function fetchCalendarState(auth: OAuth2Client): Promise<{
   const today = (todayRes.data.items ?? []).map(toCalendarEvent).filter(Boolean) as CalendarEvent[];
   const upcoming_deadlines = (deadlineRes.data.items ?? []).map(toCalendarEvent).filter(Boolean) as CalendarEvent[];
 
-  const workStart = parseWorkTime(process.env.WORK_DAY_START ?? '09:00', now);
-  const workEnd = parseWorkTime(process.env.WORK_DAY_END ?? '18:00', now);
+  const workStart = localTimeOnDay(process.env.WORK_DAY_START ?? '09:00', now);
+  const workEnd = localTimeOnDay(process.env.WORK_DAY_END ?? '18:00', now);
   const free_blocks = computeFreeBlocks(today, workStart, workEnd);
 
   return { today, free_blocks, upcoming_deadlines };
@@ -70,13 +69,6 @@ function toCalendarEvent(e: {
     location: e.location ?? undefined,
     meeting_link,
   };
-}
-
-function parseWorkTime(hhmm: string, refDate: Date): Date {
-  const [hours, minutes] = hhmm.split(':').map(Number);
-  const d = new Date(refDate);
-  d.setHours(hours, minutes, 0, 0);
-  return d;
 }
 
 function computeFreeBlocks(events: CalendarEvent[], workStart: Date, workEnd: Date): TimeBlock[] {
