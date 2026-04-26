@@ -229,7 +229,7 @@ export default function Setup({ onDone, T }: Props) {
   };
 
   return (
-    <div style={{ padding: '48px 24px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
