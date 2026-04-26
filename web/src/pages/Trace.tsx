@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { runTrace, type AgentRun, type TraceResult } from '../api';
+import type { AgentRun, TraceResult } from '../api';
 
 const T = {
   bg: '#ece8dc',
@@ -21,64 +21,40 @@ const T = {
 
 const spinnerKeyframes = `
 @keyframes oc-spin { to { transform: rotate(360deg); } }
+@keyframes oc-fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 `;
 
-function Spinner() {
+function Spinner({ size = 16 }: { size?: number }) {
   return (
     <>
       <style>{spinnerKeyframes}</style>
-      <span style={{ display: 'inline-block', width: 16, height: 16, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8 }} />
+      <span style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8, flexShrink: 0 }} />
     </>
   );
 }
 
-// ─── Metrics bar graph ─────────────────────────────────────────────────────────
+// ─── Big delta metrics strip ──────────────────────────────────────────────────
 
-function MetricsBarGraph({ result }: { result: TraceResult }) {
-  const { without, with: with_, deltas } = result;
-  const withoutTokens = without.inputTokens + without.outputTokens;
-  const withTokens = with_.inputTokens + with_.outputTokens;
-
-  const metrics = [
-    { label: 'Tool calls', without: without.toolCalls.length, with: with_.toolCalls.length, pct: deltas.toolCallsPct, unit: '' },
-    { label: 'LLM turns', without: without.llmTurns, with: with_.llmTurns, pct: deltas.llmTurnsPct, unit: '' },
-    { label: 'Latency', without: without.totalLatencyMs, with: with_.totalLatencyMs, pct: deltas.latencyPct, unit: 'ms' },
-    { label: 'Tokens', without: withoutTokens, with: withTokens, pct: deltas.tokensPct, unit: '' },
+function DeltaStrip({ deltas }: { deltas: TraceResult['deltas'] }) {
+  const items = [
+    { label: 'tool calls', value: deltas.toolCallsPct },
+    { label: 'LLM turns', value: deltas.llmTurnsPct },
+    { label: 'latency', value: deltas.latencyPct },
+    { label: 'tokens', value: deltas.tokensPct },
   ];
 
-  function Bar({ value, max, accent, label }: { value: number; max: number; accent: string; label: string }) {
-    const height = max > 0 ? (value / max) * 100 : 0;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
-        <div style={{ width: '100%', height: 120, background: '#e8e4d8', borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: accent, transition: 'height 0.3s ease' }} />
-        </div>
-        <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{label}</span>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ marginBottom: 64, padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, maxWidth: 550, margin: '0 auto' }}>
-      <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 16 }}>Metrics comparison</div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 16 }}>
-        {metrics.map(metric => {
-          const maxForMetric = Math.max(metric.without, metric.with);
-          return (
-            <div key={metric.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: T.text, textAlign: 'center', marginBottom: 4 }}>{metric.label}</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                <Bar value={metric.without} max={maxForMetric} accent={T.withoutAccent} label="Without" />
-                <Bar value={metric.with} max={maxForMetric} accent={T.withAccent} label="With" />
-              </div>
-              <div style={{ fontSize: '0.75rem', color: T.success, fontWeight: 600, textAlign: 'center' }}>
-                {metric.pct}% fewer
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 12, marginBottom: 32, animation: 'oc-fadein 0.4s ease' }}>
+      {items.map(({ label, value }) => (
+        <div key={label} style={{ textAlign: 'center', padding: '20px 12px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 12, borderTop: `4px solid ${T.withAccent}` }}>
+          <div style={{ fontSize: '3rem', fontWeight: 800, color: T.withAccent, letterSpacing: '-0.03em', lineHeight: 1 }}>
+            {value}%
+          </div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginTop: 8 }}>
+            fewer {label}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -93,11 +69,25 @@ function MetricBadge({ label, value, color }: { label: string; value: string | n
   );
 }
 
-function AgentPanel({ label, run, accent }: { label: string; run: AgentRun; accent: string }) {
+function AgentPanel({ label, run, accent }: { label: string; run: AgentRun | null; accent: string }) {
+  // Pending state — agent still running
+  if (!run) {
+    return (
+      <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
+        <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
+          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent }}>{label}</div>
+        </div>
+        <div style={{ padding: '48px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: '0.85rem' }}>
+          <Spinner />Running…
+        </div>
+      </div>
+    );
+  }
+
   const totalTokens = run.inputTokens + run.outputTokens;
 
   return (
-    <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
+    <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card, animation: 'oc-fadein 0.35s ease' }}>
       {/* Panel header */}
       <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
         <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent, letterSpacing: '0.01em' }}>{label}</div>
@@ -158,30 +148,100 @@ const EXAMPLE_PROMPTS = [
   'Did anyone email me urgently?',
 ];
 
+type StreamState = {
+  without: AgentRun | null;
+  with: AgentRun | null;
+  deltas: TraceResult['deltas'] | null;
+  prompt: string;
+};
+
+/** Computes percentage reduction from `from` to `to`, clamped to 0 when from=0. */
+function pctReduction(from: number, to: number): number {
+  if (from === 0) return 0;
+  return Math.round((from - to) / from * 100);
+}
+
 export default function Trace() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<TraceResult | null>(null);
+  const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleRun(e: React.FormEvent) {
     e.preventDefault();
     if (!prompt.trim()) return;
+
     setLoading(true);
-    setResult(null);
     setError(null);
+    setStream({ without: null, with: null, deltas: null, prompt: prompt.trim() });
+
     try {
-      const res = await runTrace(prompt.trim());
-      setResult(res);
+      const url = `/api/trace/stream?prompt=${encodeURIComponent(prompt.trim())}`;
+      const es = new EventSource(url);
+
+      let withoutRun: AgentRun | null = null;
+      let withRun: AgentRun | null = null;
+
+      es.addEventListener('without', (e: MessageEvent) => {
+        withoutRun = JSON.parse(e.data) as AgentRun;
+        setStream(s => s ? { ...s, without: withoutRun } : s);
+      });
+
+      es.addEventListener('with', (e: MessageEvent) => {
+        withRun = JSON.parse(e.data) as AgentRun;
+        setStream(s => s ? { ...s, with: withRun } : s);
+      });
+
+      es.addEventListener('done', () => {
+        es.close();
+        setLoading(false);
+        // Compute deltas once both runs are known
+        if (withoutRun && withRun) {
+          const withoutTokens = withoutRun.inputTokens + withoutRun.outputTokens;
+          const withTokens = withRun.inputTokens + withRun.outputTokens;
+          const deltas: TraceResult['deltas'] = {
+            toolCallsPct: pctReduction(withoutRun.toolCalls.length, withRun.toolCalls.length),
+            llmTurnsPct: pctReduction(withoutRun.llmTurns, withRun.llmTurns),
+            latencyPct: pctReduction(withoutRun.totalLatencyMs, withRun.totalLatencyMs),
+            tokensPct: pctReduction(withoutTokens, withTokens),
+          };
+          setStream(s => s ? { ...s, deltas } : s);
+        }
+      });
+
+      es.addEventListener('error', (e: MessageEvent) => {
+        es.close();
+        setLoading(false);
+        try {
+          const data = JSON.parse(e.data);
+          setError(data.error ?? 'Trace failed');
+        } catch {
+          setError('Trace failed');
+        }
+        setStream(null);
+      });
+
+      // Handle connection-level errors (network, server down)
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) return;
+        es.close();
+        setLoading(false);
+        setError('Connection lost — is the server running?');
+        setStream(null);
+      };
     } catch (err: any) {
-      setError(err.message ?? 'Trace failed');
-    } finally {
       setLoading(false);
+      setError(err.message ?? 'Trace failed');
+      setStream(null);
     }
   }
 
+  const bothDone = stream?.without && stream?.with;
+
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      <style>{spinnerKeyframes}</style>
+
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Live Trace</h1>
@@ -208,7 +268,7 @@ export default function Trace() {
             disabled={loading || !prompt.trim()}
             style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}
           >
-            {loading ? <><Spinner />Running…</> : 'Run Trace'}
+            {loading ? <><Spinner size={14} />Running…</> : 'Run Trace'}
           </button>
         </div>
 
@@ -228,41 +288,33 @@ export default function Trace() {
         </div>
       </form>
 
-      {/* Loading state */}
-      {loading && (
-        <div style={{ padding: '40px', textAlign: 'center', border: `1.5px dashed ${T.border}`, borderRadius: 10, color: T.muted, fontSize: '0.875rem' }}>
-          <Spinner />
-          Running both agents in parallel — this takes 5–15 seconds…
-        </div>
-      )}
-
       {/* Error */}
       {error && (
-        <div style={{ padding: '13px 18px', borderRadius: 8, background: '#fdf0f0', border: '1px solid #efb8b8', color: T.error, fontSize: '0.875rem' }}>
+        <div style={{ padding: '13px 18px', borderRadius: 8, background: '#fdf0f0', border: '1px solid #efb8b8', color: T.error, fontSize: '0.875rem', marginBottom: 24 }}>
           ✗ {error}
         </div>
       )}
 
       {/* Results */}
-      {result && (
+      {stream && (
         <>
-          {/* Metrics bar graph */}
-          <MetricsBarGraph result={result} />
+          {/* Delta metrics — shown only when both agents are done */}
+          {bothDone && stream.deltas && <DeltaStrip deltas={stream.deltas} />}
 
           <div style={{ marginBottom: 16, fontSize: '0.875rem', color: T.muted }}>
-            Prompt: <span style={{ fontWeight: 600, color: T.text }}>"{result.prompt}"</span>
+            Prompt: <span style={{ fontWeight: 600, color: T.text }}>"{stream.prompt}"</span>
           </div>
 
-          {/* Side-by-side panels */}
+          {/* Side-by-side panels — each appears as its agent completes */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <AgentPanel
               label="WITHOUT OneCall  (raw tool calls)"
-              run={result.without}
+              run={stream.without}
               accent={T.withoutAccent}
             />
             <AgentPanel
               label="WITH OneCall  (harness injection)"
-              run={result.with}
+              run={stream.with}
               accent={T.withAccent}
             />
           </div>

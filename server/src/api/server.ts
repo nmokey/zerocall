@@ -142,6 +142,48 @@ export function createApiServer(): express.Express {
     }
   });
 
+  // SSE endpoint — streams each agent result as it completes so the UI can
+  // render the faster agent immediately without waiting for both to finish.
+  app.get('/api/trace/stream', async (req, res) => {
+    const prompt = typeof req.query.prompt === 'string' ? req.query.prompt.trim() : '';
+    if (!prompt) {
+      res.status(400).json({ error: 'prompt is required' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const { runWithoutOneCall, runWithOneCall } = await import('../trace/agents.js');
+
+      const client = new Anthropic({ apiKey });
+
+      // Race both agents — each sends its event as soon as it resolves.
+      await Promise.all([
+        runWithoutOneCall(client, prompt).then(run => send('without', run)),
+        runWithOneCall(client, prompt).then(run => send('with', run)),
+      ]);
+
+      send('done', {});
+    } catch (err: any) {
+      console.error('[api] trace/stream error:', err);
+      send('error', { error: err.message ?? 'Trace failed' });
+    } finally {
+      res.end();
+    }
+  });
+
   // Serve the React SPA in production (web/dist built by `npm run build -w web`)
   const webDist = path.resolve(__dirname, '../../../web/dist');
   app.use(express.static(webDist));
