@@ -43,7 +43,7 @@ Pre-deciding what data to inject means injecting things users don't need. OneCal
 
 OneCall has four layers:
 
-**Layer 1: Background sync** — A lazy-refresh sync system that fetches from Gmail, Google Calendar, and Notion on demand (when a snapshot is requested and the cache is stale), distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
+**Layer 1: Lazy-cached sync** — `ensureFreshSnapshot()` checks if the cached snapshot is older than 15 minutes. If stale (or missing), it triggers a parallel fetch from Gmail, Google Calendar, and Notion, distills responses into a clean `WorkStateSnapshot`, and persists it to SQLite. There is no background polling loop — syncing is on-demand.
 
 **Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
 
@@ -66,7 +66,7 @@ onecall/
 │   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
 │   ├── package.json
 │   └── tsconfig.json
-├── server/                    # Background sync server + Express API
+├── server/                    # Lazy-cached sync + Express API
 │   ├── src/
 │   │   ├── index.ts           # Public API surface for @onecall/server (re-exports)
 │   │   ├── main.ts            # Entrypoint: initSchema + HTTP server
@@ -76,7 +76,7 @@ onecall/
 │   │   │   ├── config.ts      # Credential validation + .env writing
 │   │   │   └── setup.ts       # (legacy) server-rendered HTML setup page
 │   │   ├── sync/
-│   │   │   ├── scheduler.ts   # Lazy cache-refresh (ensureFreshSnapshot)
+│   │   │   ├── scheduler.ts   # ensureFreshSnapshot() — lazy cache, syncs on demand
 │   │   │   └── syncAll.ts     # Orchestrates a full sync across all providers
 │   │   ├── providers/
 │   │   │   ├── types.ts       # TaskProvider interface
@@ -359,18 +359,11 @@ CREATE TABLE IF NOT EXISTS adaptive_config (
 
 ---
 
-### Background Sync
+### Sync
 
 `syncAll()` calls each provider in parallel (`Promise.allSettled`), merges results into a `WorkStateSnapshot`, and writes to SQLite. Errors from individual providers are caught and written to `meta.errors` — a Gmail failure should not block calendar data from being saved.
 
-```typescript
-// scheduler.ts — lazy cache refresh
-export async function ensureFreshSnapshot(maxAgeMs = 15 * 60 * 1000): Promise<WorkStateSnapshot | null> {
-  // Returns cached in-memory snapshot if fresh, otherwise triggers syncAll() and caches the result
-}
-```
-
-`ensureFreshSnapshot()` is the primary entry point for snapshot retrieval. It returns immediately if the cached snapshot is under `maxAgeMs` old, and triggers a full sync otherwise. Live agents pass this as `snapshotGetter`; the demo uses `() => MOCK_SNAPSHOT` instead.
+`ensureFreshSnapshot()` in `scheduler.ts` implements lazy caching: returns the cached snapshot if it's under 15 minutes old, otherwise triggers a fresh `syncAll()` first. There is no background polling loop — syncing is purely on-demand when a snapshot is requested.
 
 ---
 
