@@ -3,7 +3,17 @@ import type { OAuth2Client } from 'google-auth-library';
 import type { CalendarEvent, TimeBlock } from '@zerocall/harness';
 import { startOfLocalDay, endOfLocalDay, localTimeOnDay } from '@zerocall/harness';
 
-export async function fetchCalendarState(auth: OAuth2Client): Promise<{
+export interface CalendarFetchConfig {
+  /** How many days ahead to search for deadline events. */
+  deadlineDays: number;
+}
+
+const DEFAULT_CALENDAR_CONFIG: CalendarFetchConfig = { deadlineDays: 7 };
+
+export async function fetchCalendarState(
+  auth: OAuth2Client,
+  config: CalendarFetchConfig = DEFAULT_CALENDAR_CONFIG,
+): Promise<{
   today: CalendarEvent[];
   free_blocks: TimeBlock[];
   upcoming_deadlines: CalendarEvent[];
@@ -13,7 +23,7 @@ export async function fetchCalendarState(auth: OAuth2Client): Promise<{
   const now = new Date();
   const startOfToday = startOfLocalDay(now);
   const endOfToday = endOfLocalDay(now);
-  const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const deadlineCutoff = new Date(now.getTime() + config.deadlineDays * 24 * 60 * 60 * 1000);
 
   const [todayRes, deadlineRes] = await Promise.all([
     calendar.events.list({
@@ -26,7 +36,7 @@ export async function fetchCalendarState(auth: OAuth2Client): Promise<{
     calendar.events.list({
       calendarId: 'primary',
       timeMin: now.toISOString(),
-      timeMax: sevenDaysOut.toISOString(),
+      timeMax: deadlineCutoff.toISOString(),
       q: 'deadline due',
       singleEvents: true,
       orderBy: 'startTime',

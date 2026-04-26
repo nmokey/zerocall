@@ -2,7 +2,19 @@ import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import type { EmailThread } from '@zerocall/harness';
 
-export async function fetchEmailState(auth: OAuth2Client): Promise<{
+export interface GmailFetchConfig {
+  /** How many calendar days back to search for threads. */
+  newerThanDays: number;
+  /** Maximum number of threads to fetch. */
+  maxResults: number;
+}
+
+const DEFAULT_GMAIL_CONFIG: GmailFetchConfig = { newerThanDays: 2, maxResults: 50 };
+
+export async function fetchEmailState(
+  auth: OAuth2Client,
+  config: GmailFetchConfig = DEFAULT_GMAIL_CONFIG,
+): Promise<{
   action_required: EmailThread[];
   awaiting_reply: EmailThread[];
   unread_count: number;
@@ -12,8 +24,8 @@ export async function fetchEmailState(auth: OAuth2Client): Promise<{
 
   const listRes = await gmail.users.threads.list({
     userId: 'me',
-    q: 'newer_than:2d',
-    maxResults: 50,
+    q: `newer_than:${config.newerThanDays}d`,
+    maxResults: config.maxResults,
   });
 
   const threads = listRes.data.threads ?? [];

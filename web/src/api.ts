@@ -158,11 +158,10 @@ export function runTrace(prompt: string): Promise<TraceResult> {
 
 // ─── Adaptive ─────────────────────────────────────────────────────────────────
 
-export interface AdaptiveSuggestion {
-  section: 'calendar' | 'email' | 'tasks';
-  action: 'disable';
-  relevanceScore: number;
-  projectedTokenSavings: number;
+export interface FetchProfile {
+  calendar: { deadlineDays: number };
+  email: { newerThanDays: number; maxResults: number };
+  tasks: { pageSize: number };
 }
 
 export interface AdaptiveStats {
@@ -170,7 +169,7 @@ export interface AdaptiveStats {
   categoryDistribution: Record<string, number>;
   sectionRelevance: Record<string, number>;
   currentConfig: Record<'calendar' | 'email' | 'tasks', boolean>;
-  suggestions: AdaptiveSuggestion[];
+  fetchProfile: FetchProfile;
 }
 
 export function getAdaptiveStats(): Promise<AdaptiveStats> {

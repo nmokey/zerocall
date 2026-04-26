@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
+import type { AgentRun, AdaptiveStats, FetchProfile, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
 import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import type { Theme } from '../theme';
 
@@ -71,12 +71,14 @@ function MetricsBarGraph({ without, with: with_, deltas, T }: { without: AgentRu
     // Gradient fades from solid accent at top to 50% opacity at bottom
     const barGradient = `linear-gradient(to bottom, ${accent}, ${accent}80)`;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 28, gap: 6 }}>
         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
         <div style={{ width: '100%', height: 100, background: T.barBg, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: barGradient, transition: 'height 0.4s ease' }} />
         </div>
-        <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{sublabel}</span>
+        <div style={{ position: 'relative', width: '100%', height: '1em' }}>
+          <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '0.7rem', color: T.muted, whiteSpace: 'nowrap' }}>{sublabel}</span>
+        </div>
       </div>
     );
   }
@@ -84,15 +86,15 @@ function MetricsBarGraph({ without, with: with_, deltas, T }: { without: AgentRu
   return (
     <div style={{ padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, marginBottom: 28, animation: 'oc-fadein 0.4s ease' }}>
       <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 16 }}>Metrics comparison</div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 32 }}>
         {metrics.map(m => {
           const max = Math.max(m.without, m.with);
           return (
             <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 600, color: T.text, textAlign: 'center' }}>{m.label}</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                <Bar value={m.without} max={max} accent={T.withoutAccent} sublabel="Without" />
-                <Bar value={m.with}    max={max} accent={T.withAccent}    sublabel="With" />
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', justifyContent: 'center' }}>
+                <Bar value={m.without} max={max} accent={T.withoutAccent} sublabel="Raw" />
+                <Bar value={m.with}    max={max} accent={T.withAccent}    sublabel="ZeroCall" />
               </div>
             </div>
           );
@@ -231,9 +233,9 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false, T
 // ─── Query classification bar ─────────────────────────────────────────────────
 
 const CATEGORY_COLORS: Record<string, string> = {
-  calendar: '#f59e0b',
-  email:    '#8b5cf6',
-  tasks:    '#10b981',
+  calendar: '#b8882a',
+  email:    '#6a5898',
+  tasks:    '#3a8a64',
   general:  '#94a3b8',
 };
 
@@ -246,6 +248,23 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const SECTION_KEYS = ['calendar', 'email', 'tasks'] as const;
 
+/** Normalises a fetch profile value to [0, 1] for bar display. */
+function fetchDepth(section: 'calendar' | 'email' | 'tasks', profile: FetchProfile): number {
+  if (section === 'calendar') return (profile.calendar.deadlineDays - 3) / (14 - 3);
+  if (section === 'email') {
+    const d = (profile.email.newerThanDays - 1) / (7 - 1);
+    const r = (profile.email.maxResults - 10) / (100 - 10);
+    return (d + r) / 2;
+  }
+  return (profile.tasks.pageSize - 50) / (200 - 50);
+}
+
+function fetchDepthLabel(section: 'calendar' | 'email' | 'tasks', profile: FetchProfile): string {
+  if (section === 'calendar') return `${profile.calendar.deadlineDays}d deadline window`;
+  if (section === 'email')    return `${profile.email.newerThanDays}d lookback · ${profile.email.maxResults} threads`;
+  return `${profile.tasks.pageSize} pages`;
+}
+
 function QueryClassificationBar({
   stats,
   onToggle,
@@ -255,13 +274,7 @@ function QueryClassificationBar({
   onToggle: (section: string, enabled: boolean) => void;
   T: Theme;
 }) {
-  const { categoryDistribution, queryCount, currentConfig, sectionRelevance, suggestions } = stats;
-
-  const rows = (['calendar', 'email', 'tasks', 'general'] as const)
-    .map(cat => ({ cat, count: categoryDistribution[cat] ?? 0 }))
-    .filter(r => r.count > 0);
-
-  const suggestionSections = new Set(suggestions.map(s => s.section));
+  const { currentConfig, fetchProfile } = stats;
 
   return (
     <div style={{
@@ -274,136 +287,60 @@ function QueryClassificationBar({
     }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer }}>
-            Adaptive context
-          </span>
-          <span style={{ fontSize: '0.72rem', color: T.muted }}>
-            {queryCount} {queryCount === 1 ? 'query' : 'queries'} classified
-          </span>
-        </div>
+        <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer }}>
+          Fetch depth · adaptive
+        </span>
 
         {/* Section enable/disable toggles */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {SECTION_KEYS.map(sec => {
             const enabled = currentConfig[sec] !== false;
-            const hasSuggestion = suggestionSections.has(sec);
-            const relevancePct = Math.round((sectionRelevance[sec] ?? 0) * 100);
-            const tokenSavings = suggestions.find(s => s.section === sec)?.projectedTokenSavings ?? 0;
             return (
               <button
                 key={sec}
                 onClick={() => onToggle(sec, !enabled)}
-                title={
-                  hasSuggestion
-                    ? `Only ${relevancePct}% of queries need this — click to disable and save ~${tokenSavings} tokens/req`
-                    : enabled
-                      ? `${CATEGORY_LABELS[sec]} context injecting — click to disable`
-                      : `${CATEGORY_LABELS[sec]} context disabled — click to enable`
-                }
+                title={enabled ? `${CATEGORY_LABELS[sec]} context injecting — click to disable` : `${CATEGORY_LABELS[sec]} context disabled — click to enable`}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5,
                   padding: '3px 10px', borderRadius: 20,
-                  border: `1.5px solid ${hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.border}`,
+                  border: `1.5px solid ${enabled ? CATEGORY_COLORS[sec] : T.border}`,
                   background: enabled ? `${CATEGORY_COLORS[sec]}18` : T.cardHead,
-                  color: hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.dimmer,
-                  fontSize: '0.72rem', fontWeight: 600, fontFamily: 'inherit',
+                  color: enabled ? CATEGORY_COLORS[sec] : T.dimmer,
+                  fontSize: '0.72rem', fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s ease',
                   textTransform: 'uppercase', letterSpacing: '0.05em',
                 }}
               >
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: enabled ? CATEGORY_COLORS[sec] : T.border,
-                  flexShrink: 0, display: 'inline-block',
-                }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: enabled ? CATEGORY_COLORS[sec] : T.border, flexShrink: 0, display: 'inline-block' }} />
                 {CATEGORY_LABELS[sec]}
                 {!enabled && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}> off</span>}
-                {hasSuggestion && (
-                  <span style={{ fontSize: '0.65rem', marginLeft: 2 }}>↓{tokenSavings}t</span>
-                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Horizontal bar chart */}
-      {rows.length === 0 ? (
-        <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>
-          No queries classified yet — run a trace to see your query breakdown.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {rows.map(({ cat, count }) => {
-            const pct = queryCount > 0 ? Math.round((count / queryCount) * 100) : 0;
-            const color = CATEGORY_COLORS[cat];
-            const isDisabled = cat !== 'general' && currentConfig[cat as 'calendar' | 'email' | 'tasks'] === false;
-            return (
-              <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{
-                  fontSize: '0.75rem', fontWeight: 600,
-                  color: isDisabled ? T.dimmer : T.muted,
-                  width: 60, flexShrink: 0,
-                  textDecoration: isDisabled ? 'line-through' : 'none',
-                }}>
-                  {CATEGORY_LABELS[cat]}
-                </span>
-                <div style={{ flex: 1, height: 12, background: T.barBg, borderRadius: 6, overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', width: `${pct}%`,
-                    background: isDisabled ? T.dimmer : color,
-                    borderRadius: 6,
-                    transition: 'width 0.5s ease',
-                    opacity: isDisabled ? 0.4 : 1,
-                  }} />
-                </div>
-                <span style={{
-                  fontSize: '0.75rem', fontWeight: 700,
-                  color: isDisabled ? T.dimmer : color,
-                  width: 36, flexShrink: 0, textAlign: 'right',
-                  opacity: isDisabled ? 0.5 : 1,
-                }}>
-                  {pct}%
-                </span>
-                <span style={{ fontSize: '0.72rem', color: T.dimmer, width: 20, flexShrink: 0, textAlign: 'right' }}>
-                  {count}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Suggestion callout */}
-      {suggestions.length > 0 && (
-        <div style={{
-          marginTop: 16, padding: '10px 14px',
-          background: T.errorBg, border: `1px solid ${T.errorBorder}`,
-          borderRadius: 8, fontSize: '0.8rem', color: T.error,
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <span style={{ fontWeight: 600 }}>Adaptive suggestion</span>
-          {suggestions.map(s => (
-            <div key={s.section} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <span>
-                <b>{CATEGORY_LABELS[s.section]}</b> context is only relevant for {Math.round(s.relevanceScore * 100)}% of your queries — disable to save ~{s.projectedTokenSavings} tokens/request
+      {/* Fetch depth bars */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {SECTION_KEYS.map(sec => {
+          const depth = fetchDepth(sec, fetchProfile) * 100;
+          const color = CATEGORY_COLORS[sec];
+          const isDisabled = currentConfig[sec] === false;
+          return (
+            <div key={sec} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isDisabled ? T.dimmer : T.muted, width: 60, flexShrink: 0, textDecoration: isDisabled ? 'line-through' : 'none' }}>
+                {CATEGORY_LABELS[sec]}
               </span>
-              <button
-                onClick={() => onToggle(s.section, false)}
-                style={{
-                  padding: '3px 12px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'inherit',
-                  border: `1px solid ${T.error}`, borderRadius: 5,
-                  background: 'transparent', color: T.error, cursor: 'pointer', flexShrink: 0,
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                }}
-              >
-                Disable
-              </button>
+              <div style={{ flex: 1, height: 8, background: T.barBg, borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${depth}%`, background: isDisabled ? T.dimmer : color, borderRadius: 4, transition: 'width 0.5s ease', opacity: isDisabled ? 0.3 : 0.75 }} />
+              </div>
+              <span style={{ fontSize: '0.72rem', color: isDisabled ? T.dimmer : T.muted, width: 180, flexShrink: 0, textAlign: 'right', opacity: isDisabled ? 0.5 : 1 }}>
+                {fetchDepthLabel(sec, fetchProfile)}
+              </span>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -527,14 +464,8 @@ export default function Trace({ T }: { T: Theme }) {
   }, []);
 
   async function handleToggle(section: string, enabled: boolean) {
-    // Optimistically update currentConfig so the bar chart never flickers — the
-    // query counts come from the local query log and are unaffected by config changes.
-    setAdaptiveStats(prev => prev ? {
-      ...prev,
-      currentConfig: { ...prev.currentConfig, [section]: enabled },
-      // Clear any suggestion for this section immediately so the banner disappears.
-      suggestions: prev.suggestions.filter(s => s.section !== section),
-    } : prev);
+    // Optimistically update currentConfig so the bar chart never flickers.
+    setAdaptiveStats(prev => prev ? { ...prev, currentConfig: { ...prev.currentConfig, [section]: enabled } } : prev);
     try {
       await applyAdaptiveSection(section, enabled);
       await refreshAdaptiveStats();

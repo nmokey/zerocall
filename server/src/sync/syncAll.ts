@@ -5,12 +5,14 @@ import { fetchCalendarState } from '../providers/calendar.js';
 import { NotionProvider } from '../providers/notion.js';
 import { SlackProvider } from '../providers/slack.js';
 import { writeSnapshot, logSyncStart, logSyncEnd } from '../db/snapshot.js';
+import { computeFetchProfile } from '../analytics/suggestions.js';
 import type { WorkStateSnapshot } from '@zerocall/harness';
 
 export async function syncAll(): Promise<void> {
   const logId = logSyncStart();
   const start = Date.now();
   const errors: string[] = [];
+  const fetchProfile = computeFetchProfile();
 
   const snapshot: WorkStateSnapshot = {
     as_of: new Date().toISOString(),
@@ -34,15 +36,15 @@ export async function syncAll(): Promise<void> {
     if (enableGmail || enableCalendar) {
       const authPromise = getAuthenticatedClient().then(async auth => {
         const results: any[] = [];
-        if (enableGmail) results.push(fetchEmailState(auth).then(r => ({ type: 'gmail', data: r })));
-        if (enableCalendar) results.push(fetchCalendarState(auth).then(r => ({ type: 'gcal', data: r })));
+        if (enableGmail) results.push(fetchEmailState(auth, fetchProfile.email).then(r => ({ type: 'gmail', data: r })));
+        if (enableCalendar) results.push(fetchCalendarState(auth, fetchProfile.calendar).then(r => ({ type: 'gcal', data: r })));
         return Promise.allSettled(results);
       });
       tasks.push(authPromise);
     }
 
     if (enableNotion) {
-      const notion = new NotionProvider();
+      const notion = new NotionProvider(fetchProfile.tasks);
       tasks.push(notion.getTasks().then(r => ({ type: 'notion', data: r })));
     }
 

@@ -2,14 +2,23 @@ import type { TaskProvider } from './types.js';
 import type { Task } from '@zerocall/harness';
 import { todayLocalDate } from '@zerocall/harness';
 
+export interface NotionFetchConfig {
+  /** Maximum number of pages to fetch from the database. */
+  pageSize: number;
+}
+
+const DEFAULT_NOTION_CONFIG: NotionFetchConfig = { pageSize: 100 };
+
 export class NotionProvider implements TaskProvider {
   name = 'notion' as const;
   private token: string;
   private databaseId: string;
+  private config: NotionFetchConfig;
 
-  constructor() {
+  constructor(config: NotionFetchConfig = DEFAULT_NOTION_CONFIG) {
     this.token = process.env.NOTION_TOKEN!;
     this.databaseId = process.env.NOTION_DATABASE_ID!;
+    this.config = config;
   }
 
   async getTasks(): Promise<{ overdue: Task[]; due_today: Task[]; in_progress: Task[] }> {
@@ -24,7 +33,7 @@ export class NotionProvider implements TaskProvider {
       },
       body: JSON.stringify({
         sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-        page_size: 100,
+        page_size: this.config.pageSize,
       }),
     });
     if (!res.ok) {

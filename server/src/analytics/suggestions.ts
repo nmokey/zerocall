@@ -3,6 +3,19 @@ import { readAdaptiveConfig, type SectionConfig } from '../db/adaptiveConfig.js'
 import { readLatestSnapshot } from '../db/snapshot.js';
 import type { WorkStateSnapshot } from '@zerocall/harness';
 
+export interface FetchProfile {
+  calendar: { deadlineDays: number };
+  email: { newerThanDays: number; maxResults: number };
+  tasks: { pageSize: number };
+}
+
+/** Hardcoded defaults matching the provider constants before any adaptation. */
+export const DEFAULT_FETCH_PROFILE: FetchProfile = {
+  calendar: { deadlineDays: 7 },
+  email: { newerThanDays: 2, maxResults: 50 },
+  tasks: { pageSize: 100 },
+};
+
 export interface AdaptiveSuggestion {
   section: keyof SectionConfig;
   action: 'disable';
@@ -16,6 +29,7 @@ export interface AdaptiveStats {
   sectionRelevance: Record<string, number>;
   currentConfig: SectionConfig;
   suggestions: AdaptiveSuggestion[];
+  fetchProfile: FetchProfile;
 }
 
 /** Minimum queries required before we surface suggestions. */
@@ -79,9 +93,42 @@ function estimateSectionTokens(snapshot: WorkStateSnapshot, section: keyof Secti
   return Math.round(chars / 4);
 }
 
+function lerp(min: number, max: number, t: number): number {
+  return min + t * (max - min);
+}
+
+/**
+ * Derives a FetchProfile from the recent query distribution.
+ * Sections with higher query share get deeper fetch parameters (longer time
+ * windows, larger result counts). Returns DEFAULT_FETCH_PROFILE when fewer
+ * than 5 specific queries have been logged — no behavioural change for new users.
+ *
+ * @returns FetchProfile with per-provider fetch parameters.
+ */
+export function computeFetchProfile(): FetchProfile {
+  const queries = readRecentQueries(100);
+  const specific = queries.filter(q => q.category !== 'general');
+  if (specific.length < MIN_QUERIES_FOR_SUGGESTION) return DEFAULT_FETCH_PROFILE;
+
+  const total = specific.length;
+  const calendarWeight = specific.filter(q => q.category === 'calendar').length / total;
+  const emailWeight    = specific.filter(q => q.category === 'email').length / total;
+  const tasksWeight    = specific.filter(q => q.category === 'tasks').length / total;
+
+  return {
+    calendar: { deadlineDays: Math.round(lerp(3, 14, calendarWeight)) },
+    email: {
+      newerThanDays: Math.round(lerp(1, 7, emailWeight)),
+      maxResults:    Math.round(lerp(10, 100, emailWeight)),
+    },
+    tasks: { pageSize: Math.round(lerp(50, 200, tasksWeight)) },
+  };
+}
+
 /**
  * Computes adaptive stats from the recent query log:
- * category distribution, per-section relevance scores, and disable suggestions.
+ * category distribution, per-section relevance scores, disable suggestions,
+ * and the current adaptive fetch profile.
  *
  * @returns AdaptiveStats with suggestions ready for the dashboard.
  */
@@ -141,5 +188,6 @@ export function computeAdaptiveStats(): AdaptiveStats {
     sectionRelevance,
     currentConfig,
     suggestions,
+    fetchProfile: computeFetchProfile(),
   };
 }
