@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
-import { ZeroCallAnthropic } from '@zerocall/harness';
+import { ZeroCallAnthropic, todayLocalDate } from '@zerocall/harness';
 import { getAuthenticatedClient } from '../auth/google.js';
 import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
@@ -98,7 +98,7 @@ const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
 /** Builds the raw tool definitions for the without-ZeroCall agent, with today's date computed fresh per call. */
 function buildRawTools(): Tool[] {
-  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const today = todayLocalDate(); // YYYY-MM-DD in user's configured timezone
   return [
     {
       name: 'gmail_search_threads',

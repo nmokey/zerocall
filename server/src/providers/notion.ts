@@ -1,6 +1,7 @@
 import { Client } from '@notionhq/client';
 import type { TaskProvider } from './types.js';
 import type { Task } from '@zerocall/harness';
+import { todayLocalDate } from '@zerocall/harness';
 
 export class NotionProvider implements TaskProvider {
   name = 'notion' as const;
@@ -32,7 +33,7 @@ export class NotionProvider implements TaskProvider {
     const due_today: Task[] = [];
     const in_progress: Task[] = [];
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayLocalDate();
 
     for (const page of response.results) {
       if (page.object !== 'page') continue;

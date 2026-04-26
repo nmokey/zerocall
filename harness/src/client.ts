@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { WorkStateSnapshot } from './types.js';
+import { formatLocalDate, formatLocalDateTime, formatLocalTime } from './timezone.js';
 
 export interface SectionConfig {
   calendar: boolean;
@@ -142,7 +143,8 @@ function injectSnapshot(
 function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
   const lines: string[] = [];
 
-  lines.push(`--- ZEROCALL WORK CONTEXT (as of ${s.as_of}) ---`);
+  lines.push(`--- ZEROCALL WORK CONTEXT (as of ${formatLocalDateTime(s.as_of)}) ---`);
+  lines.push(`Current local time: ${formatLocalDateTime(new Date())}`);
 
   if (config.calendar) {
     lines.push('\n[CALENDAR TODAY]');
@@ -235,12 +237,12 @@ function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
   return lines.join('\n');
 }
 
-/** Format an ISO timestamp as HH:MM (UTC) for calendar display. */
+/** Format an ISO timestamp as HH:MM in the user's configured timezone. */
 function fmtTime(iso: string): string {
-  return iso.slice(11, 16);
+  return formatLocalTime(iso);
 }
 
-/** Format an ISO timestamp as YYYY-MM-DD for date display. */
+/** Format an ISO timestamp as YYYY-MM-DD in the user's configured timezone. */
 function fmtDate(iso: string): string {
-  return iso.slice(0, 10);
+  return formatLocalDate(iso);
 }
