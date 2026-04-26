@@ -270,14 +270,17 @@ function ToolCallTracePanel({ calls, inProgress, run, elapsed }: {
         })}
 
         {/* In-flight indicator — only when we already have calls and another is pending */}
-        {inProgress && !isDone && calls.length > 0 && (
+        {inProgress && !isDone && calls.length > 0 && (() => {
+          const lastCumMs = calls.reduce((sum, c) => sum + c.latencyMs, 0);
+          return (
           <div style={{ color: T.traceYellow, animation: 'oc-pulse 1.5s ease infinite' }}>
-            <span style={{ color: T.traceDim }}>[{formatMs(elapsed)}]</span>{' '}
+            <span style={{ color: T.traceDim }}>[{formatMs(lastCumMs)}+]</span>{' '}
             <span style={{ color: T.traceYellow }}>TOOL</span>{' '}
             calling...
             <span style={{ animation: 'oc-blink 1s step-end infinite' }}>_</span>
           </div>
-        )}
+          );
+        })()}
 
         {/* Waiting for first call */}
         {!isDone && calls.length === 0 && inProgress && (
