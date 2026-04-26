@@ -94,56 +94,59 @@ async function runAgentLoop(
 
 const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
-const RAW_TOOLS: Tool[] = [
-  {
-    name: 'gmail_search_threads',
-    description: 'Search Gmail threads matching a query. Returns matching email threads with subject, sender, and snippet.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: { type: 'string', description: 'Gmail search query (e.g. "newer_than:2d is:unread")' },
-        max_results: { type: 'number', description: 'Maximum number of threads to return' },
+function buildRawTools(): Tool[] {
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  return [
+    {
+      name: 'gmail_search_threads',
+      description: 'Search Gmail threads matching a query. Returns matching email threads with subject, sender, and snippet.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          query: { type: 'string', description: 'Gmail search query (e.g. "newer_than:2d is:unread")' },
+          max_results: { type: 'number', description: 'Maximum number of threads to return' },
+        },
+        required: ['query'],
       },
-      required: ['query'],
     },
-  },
-  {
-    name: 'gmail_get_thread',
-    description: 'Fetch a specific Gmail thread by ID, including all messages.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        thread_id: { type: 'string', description: 'The Gmail thread ID' },
+    {
+      name: 'gmail_get_thread',
+      description: 'Fetch a specific Gmail thread by ID, including all messages.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          thread_id: { type: 'string', description: 'The Gmail thread ID' },
+        },
+        required: ['thread_id'],
       },
-      required: ['thread_id'],
     },
-  },
-  {
-    name: 'calendar_list_events',
-    description: `List Google Calendar events in a time range. Today's date is ${new Date().toISOString().slice(0, 10)}.`,
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        time_min: { type: 'string', description: 'Start of time range (ISO 8601)' },
-        time_max: { type: 'string', description: 'End of time range (ISO 8601)' },
-        query: { type: 'string', description: 'Optional text search within event titles' },
+    {
+      name: 'calendar_list_events',
+      description: `List Google Calendar events in a time range. Today's date is ${today}.`,
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          time_min: { type: 'string', description: 'Start of time range (ISO 8601)' },
+          time_max: { type: 'string', description: 'End of time range (ISO 8601)' },
+          query: { type: 'string', description: 'Optional text search within event titles' },
+        },
+        required: ['time_min', 'time_max'],
       },
-      required: ['time_min', 'time_max'],
     },
-  },
-  ...(enableNotion ? [{
-    name: 'notion_query_database',
-    description: `Query the user's Notion task database (ID: ${process.env.NOTION_DATABASE_ID}).`,
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        database_id: { type: 'string', description: 'The Notion database ID to query' },
-        filter: { type: 'object', description: 'Optional Notion filter object' },
+    ...(enableNotion ? [{
+      name: 'notion_query_database',
+      description: `Query the user's Notion task database (ID: ${process.env.NOTION_DATABASE_ID}).`,
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          database_id: { type: 'string', description: 'The Notion database ID to query' },
+          filter: { type: 'object', description: 'Optional Notion filter object' },
+        },
+        required: ['database_id'],
       },
-      required: ['database_id'],
-    },
-  }] : []),
-];
+    }] : []),
+  ];
+}
 
 /**
  * Runs a productivity prompt through the raw-tool agent using real API calls.
@@ -196,7 +199,7 @@ export async function runWithoutOneCall(client: Anthropic, prompt: string, onToo
     }
   }
 
-  return runAgentLoop(client, prompt, RAW_TOOLS, handleToolCall, onToolCall);
+  return runAgentLoop(client, prompt, buildRawTools(), handleToolCall, onToolCall);
 }
 
 /**
