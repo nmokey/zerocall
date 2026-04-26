@@ -246,7 +246,7 @@ function QueryClassificationBar({
   return (
     <div className={styles.adaptiveCard}>
       <div className={styles.adaptiveHeader}>
-        <span className={styles.adaptiveTitle}>Fetch depth \u00b7 adaptive</span>
+        <span className={styles.adaptiveTitle}>Fetch depth - adaptive</span>
 
         <div className={styles.sectionToggles}>
           {SECTION_KEYS.map(sec => {
