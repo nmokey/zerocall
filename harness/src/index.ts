@@ -16,4 +16,5 @@ export type {
   TimeBlock,
   EmailThread,
   Task,
+  SlackDM,
 } from './types.js';

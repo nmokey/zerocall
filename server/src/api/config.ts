@@ -37,10 +37,14 @@ export function getConfigStatus(): { present: string[]; missing: string[]; value
       values[key] = maskValue(process.env[key]!);
     }
   }
-  // Also include ANTHROPIC_API_KEY if present
+  // Optional keys surfaced for the UI but not treated as required for "configured" status.
   if (process.env.ANTHROPIC_API_KEY) {
     present.push('ANTHROPIC_API_KEY');
     values['ANTHROPIC_API_KEY'] = maskValue(process.env.ANTHROPIC_API_KEY);
+  }
+  if (process.env.SLACK_USER_TOKEN) {
+    present.push('SLACK_USER_TOKEN');
+    values['SLACK_USER_TOKEN'] = maskValue(process.env.SLACK_USER_TOKEN);
   }
   return { present, missing, values };
 }
@@ -62,6 +66,9 @@ export function validatePartialConfig(values: Record<string, string>): string[] 
     if (!/^[0-9a-f]{32}$/i.test(dbId)) {
       errors.push('NOTION_DATABASE_ID should be a 32-character hex string');
     }
+  }
+  if (values.SLACK_USER_TOKEN && !values.SLACK_USER_TOKEN.startsWith('xoxp-')) {
+    errors.push('SLACK_USER_TOKEN should start with xoxp-');
   }
   return errors;
 }

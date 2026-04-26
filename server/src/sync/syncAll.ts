@@ -3,6 +3,7 @@ import { getAuthenticatedClient } from '../auth/google.js';
 import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
 import { NotionProvider } from '../providers/notion.js';
+import { SlackProvider } from '../providers/slack.js';
 import { writeSnapshot, logSyncStart, logSyncEnd } from '../db/snapshot.js';
 import type { WorkStateSnapshot } from '@zerocall/harness';
 
@@ -23,6 +24,8 @@ export async function syncAll(): Promise<void> {
   const enableGmail = process.env.ENABLE_GMAIL !== 'false';
   const enableCalendar = process.env.ENABLE_CALENDAR !== 'false';
   const enableNotion = process.env.ENABLE_NOTION !== 'false';
+  // Slack is opt-in: only enabled when SLACK_USER_TOKEN is present in the environment.
+  const slackToken = process.env.SLACK_USER_TOKEN;
 
   try {
     const tasks: Promise<any>[] = [];
@@ -41,6 +44,11 @@ export async function syncAll(): Promise<void> {
     if (enableNotion) {
       const notion = new NotionProvider();
       tasks.push(notion.getTasks().then(r => ({ type: 'notion', data: r })));
+    }
+
+    if (slackToken) {
+      const slack = new SlackProvider(slackToken);
+      tasks.push(slack.getMessages().then(r => ({ type: 'slack', data: r })));
     }
 
     const results = await Promise.allSettled(tasks);
@@ -64,12 +72,14 @@ export async function syncAll(): Promise<void> {
               errors.push(`${subResult.value.type}: ${subResult.value.reason}`);
             }
           }
-        } else {
-          // Handle Notion result
-          if (value.type === 'notion') {
-            snapshot.tasks = value.data;
-            snapshot.meta.sources.push('notion');
-          }
+        } else if (value.type === 'notion') {
+          snapshot.tasks = value.data;
+          snapshot.meta.sources.push('notion');
+        } else if (value.type === 'slack') {
+          // Merge Slack DM data and any per-conversation non-fatal errors.
+          snapshot.slack = value.data.dms;
+          snapshot.meta.sources.push('slack');
+          for (const e of value.data.errors) errors.push(e);
         }
       } else {
         errors.push(`sync error: ${result.reason}`);

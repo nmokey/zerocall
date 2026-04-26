@@ -6,6 +6,7 @@ export interface SectionConfig {
   calendar: boolean;
   email: boolean;
   tasks: boolean;
+  slack: boolean;
 }
 
 /**
@@ -66,7 +67,7 @@ export class ZeroCallAnthropic extends Anthropic {
       if (userText) this.queryLogger(userText);
     }
 
-    const config = this.configGetter?.() ?? { calendar: true, email: true, tasks: true };
+    const config = this.configGetter?.() ?? { calendar: true, email: true, tasks: true, slack: true };
     const filtered = filterSnapshot(snapshot, config);
     body.system = injectSnapshot(existing, filtered, config);
   }
@@ -112,6 +113,9 @@ function filterSnapshot(s: WorkStateSnapshot, config: SectionConfig): WorkStateS
     tasks: config.tasks
       ? s.tasks
       : { overdue: [], due_today: [], in_progress: [] },
+    // Slack is optional on the snapshot; disabled sections become undefined
+    // so that formatSnapshot's guard (if config.slack && snapshot.slack) fires correctly.
+    slack: config.slack ? s.slack : undefined,
   };
 }
 
@@ -228,6 +232,27 @@ function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
     } else {
       for (const t of s.tasks.in_progress) {
         lines.push(`  • ${t.title}`);
+      }
+    }
+  }
+
+  if (config.slack && s.slack) {
+    lines.push('\n[SLACK — DMs NEEDING REPLY]');
+    if (s.slack.dm_action_required.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const dm of s.slack.dm_action_required) {
+        lines.push(`  • ${dm.counterparty}: "${dm.snippet}"`);
+      }
+    }
+
+    lines.push('\n[SLACK — WAITING FOR REPLY]');
+    if (s.slack.dm_awaiting_reply.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const dm of s.slack.dm_awaiting_reply) {
+        const since = dm.waiting_since ? ` (waiting since ${fmtDate(dm.waiting_since)})` : '';
+        lines.push(`  • ${dm.counterparty}${since}: "${dm.snippet}"`);
       }
     }
   }

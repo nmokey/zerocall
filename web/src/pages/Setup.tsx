@@ -94,6 +94,7 @@ export default function Setup({ onDone, T }: Props) {
     GOOGLE_CLIENT_SECRET: '',
     NOTION_TOKEN: '',
     NOTION_DATABASE_ID: '',
+    SLACK_USER_TOKEN: '',
     ANTHROPIC_API_KEY: '',
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -111,6 +112,7 @@ export default function Setup({ onDone, T }: Props) {
           GOOGLE_CLIENT_SECRET: c.values.GOOGLE_CLIENT_SECRET || '',
           NOTION_TOKEN: c.values.NOTION_TOKEN || '',
           NOTION_DATABASE_ID: c.values.NOTION_DATABASE_ID || '',
+          SLACK_USER_TOKEN: c.values.SLACK_USER_TOKEN || '',
           ANTHROPIC_API_KEY: c.values.ANTHROPIC_API_KEY || '',
         });
       }
@@ -138,6 +140,7 @@ export default function Setup({ onDone, T }: Props) {
           GOOGLE_CLIENT_SECRET: c.values.GOOGLE_CLIENT_SECRET || '',
           NOTION_TOKEN: c.values.NOTION_TOKEN || '',
           NOTION_DATABASE_ID: c.values.NOTION_DATABASE_ID || '',
+          SLACK_USER_TOKEN: c.values.SLACK_USER_TOKEN || '',
           ANTHROPIC_API_KEY: c.values.ANTHROPIC_API_KEY || '',
         });
       }
@@ -172,9 +175,10 @@ export default function Setup({ onDone, T }: Props) {
   const googleCredOk = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'].every(k => present.includes(k));
   const googleAuthed = status?.authenticated ?? false;
   const notionOk = ['NOTION_TOKEN', 'NOTION_DATABASE_ID'].every(k => present.includes(k));
+  const slackOk = present.includes('SLACK_USER_TOKEN');
   const anthropicOk = present.includes('ANTHROPIC_API_KEY');
-  const connectedCount = [googleCredOk && googleAuthed, notionOk, anthropicOk].filter(Boolean).length;
-  const allFields = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NOTION_TOKEN', 'NOTION_DATABASE_ID', 'ANTHROPIC_API_KEY'];
+  const connectedCount = [googleCredOk && googleAuthed, notionOk, slackOk, anthropicOk].filter(Boolean).length;
+  const allFields = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NOTION_TOKEN', 'NOTION_DATABASE_ID', 'SLACK_USER_TOKEN', 'ANTHROPIC_API_KEY'];
   const pendingCount = allFields.filter(k => !present.includes(k)).length;
 
   const lastSync = status?.lastSync;
@@ -287,6 +291,18 @@ export default function Setup({ onDone, T }: Props) {
             </div>
           </div>
 
+          {/* Slack */}
+          <div style={tableRow}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: T.text }}>Slack</div>
+              <div style={{ fontSize: '0.8rem', color: T.muted, marginTop: 3 }}>DMs</div>
+            </div>
+            <div><StatusDot ok={slackOk} label={slackOk ? 'Connected' : 'Not configured'} T={T} /></div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <CredField label="User Token" name="SLACK_USER_TOKEN" value={fields.SLACK_USER_TOKEN} placeholder="xoxp-…" type="password" isSet={slackOk} onChange={v => setField('SLACK_USER_TOKEN', v)} T={T} />
+            </div>
+          </div>
+
           {/* Anthropic */}
           <div style={{ ...tableRow, borderBottom: 'none' }}>
             <div>
@@ -303,7 +319,7 @@ export default function Setup({ onDone, T }: Props) {
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.cardHead }}>
           <span style={{ fontSize: '0.82rem', color: T.muted }}>
-            3 integrations · {connectedCount} connected · {pendingCount} field{pendingCount !== 1 ? 's' : ''} pending
+            4 integrations · {connectedCount} connected · {pendingCount} field{pendingCount !== 1 ? 's' : ''} pending
           </span>
           <button type="submit" disabled={saving} style={{ padding: '9px 24px', fontSize: '0.875rem', fontWeight: 600, border: 'none', borderRadius: 7, background: T.primary, color: 'white', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving…' : 'Save all'}

@@ -32,6 +32,19 @@ export interface Task {
   source: 'notion' | 'linear' | 'todoist';
 }
 
+export interface SlackDM {
+  channel_id: string;
+  /** For MPIMs, the auto-generated channel name or a member-list summary. */
+  channel_name: string;
+  /** Resolved display name(s), prefixed with @. MPIMs: comma-joined, capped at 3 + "and N others". */
+  counterparty: string;
+  last_message_at: string;
+  /** First 120 chars of the last message text. */
+  snippet: string;
+  /** ISO 8601 — set only for dm_awaiting_reply entries. */
+  waiting_since?: string;
+}
+
 export interface WorkStateSnapshot {
   as_of: string;
 
@@ -53,9 +66,20 @@ export interface WorkStateSnapshot {
     in_progress: Task[];
   };
 
+  /**
+   * Slack DM state. Optional — only present when SLACK_USER_TOKEN is configured
+   * and the sync succeeded. All existing callers that omit this field continue
+   * to compile and run correctly.
+   */
+  slack?: {
+    dm_action_required: SlackDM[];
+    dm_awaiting_reply: SlackDM[];
+    workspace_name: string;
+  };
+
   meta: {
     sync_duration_ms: number;
-    sources: Array<'gmail' | 'gcal' | 'notion'>;
+    sources: Array<'gmail' | 'gcal' | 'notion' | 'slack'>;
     errors: string[];
   };
 }
