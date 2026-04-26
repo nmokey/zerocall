@@ -16,6 +16,8 @@ import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
 import { NotionProvider } from '../providers/notion.js';
 import { ensureFreshSnapshot } from '../sync/scheduler.js';
+import { logQuery } from '../db/queryLog.js';
+import { readAdaptiveConfig } from '../db/adaptiveConfig.js';
 
 export interface ToolCallRecord {
   tool: string;
@@ -217,6 +219,8 @@ export async function runWithZeroCall(_client: Anthropic, prompt: string): Promi
   const zcClient = new ZeroCallAnthropic({
     apiKey: process.env.ANTHROPIC_API_KEY!,
     snapshotGetter: () => ensureFreshSnapshot(),
+    configGetter: readAdaptiveConfig,
+    queryLogger: logQuery,
   });
 
   const startTime = Date.now();
