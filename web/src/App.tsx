@@ -16,6 +16,7 @@ function Tab({ label, active, disabled, onClick, T }: { label: string; active: b
         padding: '10px 32px',
         fontSize: '0.95rem',
         fontWeight: active ? 600 : 400,
+        fontFamily: 'inherit',
         color: active ? T.text : disabled ? T.dimmer : T.muted,
         background: active ? T.bg : T.cardHead,
         border: `1.5px solid ${T.border}`,
@@ -57,6 +58,7 @@ function ThemeToggle({ dark, onToggle, T }: { dark: boolean; onToggle: () => voi
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: '1.1rem',
+        fontFamily: 'inherit',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         transition: 'background 0.2s, border-color 0.2s',
       }}

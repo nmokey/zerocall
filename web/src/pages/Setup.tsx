@@ -254,7 +254,7 @@ export default function Setup({ onDone, T }: Props) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            style={{ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 500, border: `1px solid ${T.border}`, borderRadius: 6, background: syncing ? T.inputBg : T.primary, color: syncing ? T.text : 'white', cursor: syncing ? 'default' : 'pointer', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            style={{ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 500, fontFamily: 'inherit', border: `1px solid ${T.border}`, borderRadius: 6, background: syncing ? T.inputBg : T.primary, color: syncing ? T.text : 'white', cursor: syncing ? 'default' : 'pointer', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
             {syncing ? 'Syncing...' : 'Sync'}
           </button>
@@ -289,7 +289,7 @@ export default function Setup({ onDone, T }: Props) {
               {googleCredOk && !googleAuthed && (
                 <>
                   <StatusDot ok={false} label="Auth required" T={T} />
-                  <button type="button" onClick={handleGoogleAuth} style={{ display: 'block', marginTop: 5, padding: 0, fontSize: '0.75rem', color: T.primary, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <button type="button" onClick={handleGoogleAuth} style={{ display: 'block', marginTop: 5, padding: 0, fontSize: '0.75rem', fontFamily: 'inherit', color: T.primary, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Authorize →
                   </button>
                 </>
@@ -345,7 +345,7 @@ export default function Setup({ onDone, T }: Props) {
           <span style={{ fontSize: '0.82rem', color: T.muted }}>
             4 integrations · {connectedCount} connected · {pendingCount} field{pendingCount !== 1 ? 's' : ''} pending
           </span>
-          <button type="submit" disabled={saving} style={{ padding: '9px 24px', fontSize: '0.875rem', fontWeight: 600, border: 'none', borderRadius: 7, background: T.primary, color: 'white', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <button type="submit" disabled={saving} style={{ padding: '9px 24px', fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit', border: 'none', borderRadius: 7, background: T.primary, color: 'white', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {saving ? 'Saving…' : 'Save all'}
           </button>
         </div>

@@ -307,7 +307,7 @@ function QueryClassificationBar({
                   border: `1.5px solid ${hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.border}`,
                   background: enabled ? `${CATEGORY_COLORS[sec]}18` : T.cardHead,
                   color: hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.dimmer,
-                  fontSize: '0.72rem', fontWeight: 600,
+                  fontSize: '0.72rem', fontWeight: 600, fontFamily: 'inherit',
                   cursor: 'pointer', transition: 'all 0.15s ease',
                   textTransform: 'uppercase', letterSpacing: '0.05em',
                 }}
@@ -392,7 +392,7 @@ function QueryClassificationBar({
               <button
                 onClick={() => onToggle(s.section, false)}
                 style={{
-                  padding: '3px 12px', fontSize: '0.72rem', fontWeight: 600,
+                  padding: '3px 12px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'inherit',
                   border: `1px solid ${T.error}`, borderRadius: 5,
                   background: 'transparent', color: T.error, cursor: 'pointer', flexShrink: 0,
                   textTransform: 'uppercase', letterSpacing: '0.05em',
@@ -657,7 +657,7 @@ export default function Trace({ T }: { T: Theme }) {
           <button
             type="submit"
             disabled={loading || !prompt.trim()}
-            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', fontFamily: 'inherit', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
             {loading ? <><Spinner size={14} T={T} />Running…</> : 'Run Trace'}
           </button>
@@ -665,7 +665,7 @@ export default function Trace({ T }: { T: Theme }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           {suggestedPrompts.map((p: string) => (
             <button key={p} type="button" onClick={() => setPrompt(p)} disabled={loading}
-              style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}>
+              style={{ padding: '4px 10px', fontSize: '0.75rem', fontFamily: 'inherit', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}>
               {p}
             </button>
           ))}
