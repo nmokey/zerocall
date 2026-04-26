@@ -1,33 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getConfig, getGoogleAuthUrl, getStatus, postConfig, triggerSync, type ApiConfig, type ApiStatus } from '../api';
+import type { Theme } from '../theme';
 
 interface Props {
   onDone: () => void;
+  T: Theme;
 }
-
-// ─── Shared design tokens (parchment palette) ─────────────────────────────────
-
-const T = {
-  bg: '#ece8dc',
-  card: '#f0ece2',
-  cardHead: '#e4dfd2',
-  border: '#c4bab0',
-  primary: '#c05a2b',
-  primaryHover: '#a84c23',
-  text: '#2a2218',
-  muted: '#7a7060',
-  dimmer: '#8a7e70',
-  label: '#524838',
-  inputBg: 'white',
-  lockedBg: '#e8e4d8',
-  lockedText: '#7a7060',
-  success: '#2e7d4f',
-  error: '#b53030',
-  successBg: '#e6f4ea',
-  successBorder: '#9dceab',
-  errorBg: '#fdf0f0',
-  errorBorder: '#efb8b8',
-};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -39,9 +17,10 @@ interface CredFieldProps {
   type?: 'text' | 'password';
   isSet?: boolean;
   onChange: (v: string) => void;
+  T: Theme;
 }
 
-function CredField({ label, name, value, placeholder, type = 'text', isSet = false, onChange }: CredFieldProps) {
+function CredField({ label, name, value, placeholder, type = 'text', isSet = false, onChange, T }: CredFieldProps) {
   const [locked, setLocked] = useState(isSet);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -95,10 +74,11 @@ function CredField({ label, name, value, placeholder, type = 'text', isSet = fal
   );
 }
 
-function StatusDot({ ok, label }: { ok: boolean; label: string }) {
+function StatusDot({ ok, label, T }: { ok: boolean; label: string; T: Theme }) {
+  const color = ok ? T.success : T.warn;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: ok ? T.success : '#c87830' }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? T.success : '#c87830', flexShrink: 0, display: 'inline-block' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
       {label}
     </div>
   );
@@ -106,7 +86,7 @@ function StatusDot({ ok, label }: { ok: boolean; label: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function Setup({ onDone }: Props) {
+export default function Setup({ onDone, T }: Props) {
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [config, setConfig] = useState<ApiConfig | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({
@@ -125,7 +105,6 @@ export default function Setup({ onDone }: Props) {
     Promise.all([getStatus(), getConfig()]).then(([s, c]) => {
       setStatus(s);
       setConfig(c);
-      // Populate fields with existing masked values
       if (c.values) {
         setFields({
           GOOGLE_CLIENT_ID: c.values.GOOGLE_CLIENT_ID || '',
@@ -199,9 +178,7 @@ export default function Setup({ onDone }: Props) {
   const pendingCount = allFields.filter(k => !present.includes(k)).length;
 
   const lastSync = status?.lastSync;
-  const syncLabel = lastSync
-    ? `last sync · ${lastSync} · `
-    : 'No sync yet';
+  const syncLabel = lastSync ? `last sync · ${lastSync} · ` : 'No sync yet';
 
   const tableHead: React.CSSProperties = {
     display: 'grid',
@@ -216,7 +193,7 @@ export default function Setup({ onDone }: Props) {
     padding: '20px 24px',
     alignItems: 'start',
     background: T.card,
-    borderBottom: `1px solid #ddd6c6`,
+    borderBottom: `1px solid ${T.tableRowBorder}`,
   };
   const sectionLabel: React.CSSProperties = {
     fontSize: '0.68rem',
@@ -248,7 +225,7 @@ export default function Setup({ onDone }: Props) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', fontSize: '0.82rem', fontWeight: 500, border: `1.5px solid ${T.border}`, borderRadius: 7, background: 'white', color: T.text, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', fontSize: '0.82rem', fontWeight: 500, border: `1.5px solid ${T.border}`, borderRadius: 7, background: T.inputBg, color: T.text, cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: T.primary, flexShrink: 0, display: 'inline-block' }} />
             {syncing ? 'Syncing…' : 'Sync now'}
@@ -280,20 +257,20 @@ export default function Setup({ onDone }: Props) {
               <div style={{ fontSize: '0.8rem', color: T.muted, marginTop: 3 }}>Gmail + Calendar</div>
             </div>
             <div>
-              {!googleCredOk && <StatusDot ok={false} label="Not configured" />}
+              {!googleCredOk && <StatusDot ok={false} label="Not configured" T={T} />}
               {googleCredOk && !googleAuthed && (
                 <>
-                  <StatusDot ok={false} label="Auth required" />
+                  <StatusDot ok={false} label="Auth required" T={T} />
                   <button type="button" onClick={handleGoogleAuth} style={{ display: 'block', marginTop: 5, padding: 0, fontSize: '0.75rem', color: T.primary, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left' }}>
                     Authorize →
                   </button>
                 </>
               )}
-              {googleCredOk && googleAuthed && <StatusDot ok={true} label="Connected" />}
+              {googleCredOk && googleAuthed && <StatusDot ok={true} label="Connected" T={T} />}
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
-              <CredField label="Client ID" name="GOOGLE_CLIENT_ID" value={fields.GOOGLE_CLIENT_ID} placeholder="123456789-abc…apps.go…" isSet={present.includes('GOOGLE_CLIENT_ID')} onChange={v => setField('GOOGLE_CLIENT_ID', v)} />
-              <CredField label="Client Secret" name="GOOGLE_CLIENT_SECRET" value={fields.GOOGLE_CLIENT_SECRET} placeholder="GOCSPX-…" type="password" isSet={present.includes('GOOGLE_CLIENT_SECRET')} onChange={v => setField('GOOGLE_CLIENT_SECRET', v)} />
+              <CredField label="Client ID" name="GOOGLE_CLIENT_ID" value={fields.GOOGLE_CLIENT_ID} placeholder="123456789-abc…apps.go…" isSet={present.includes('GOOGLE_CLIENT_ID')} onChange={v => setField('GOOGLE_CLIENT_ID', v)} T={T} />
+              <CredField label="Client Secret" name="GOOGLE_CLIENT_SECRET" value={fields.GOOGLE_CLIENT_SECRET} placeholder="GOCSPX-…" type="password" isSet={present.includes('GOOGLE_CLIENT_SECRET')} onChange={v => setField('GOOGLE_CLIENT_SECRET', v)} T={T} />
             </div>
           </div>
 
@@ -303,10 +280,10 @@ export default function Setup({ onDone }: Props) {
               <div style={{ fontWeight: 600, fontSize: '0.95rem', color: T.text }}>Notion</div>
               <div style={{ fontSize: '0.8rem', color: T.muted, marginTop: 3 }}>Tasks DB</div>
             </div>
-            <div><StatusDot ok={notionOk} label={notionOk ? 'Connected' : 'Not configured'} /></div>
+            <div><StatusDot ok={notionOk} label={notionOk ? 'Connected' : 'Not configured'} T={T} /></div>
             <div style={{ display: 'flex', gap: 12 }}>
-              <CredField label="Integration Token" name="NOTION_TOKEN" value={fields.NOTION_TOKEN} placeholder="ntn_ or secret_…" type="password" isSet={present.includes('NOTION_TOKEN')} onChange={v => setField('NOTION_TOKEN', v)} />
-              <CredField label="Database ID" name="NOTION_DATABASE_ID" value={fields.NOTION_DATABASE_ID} placeholder="xxxx…" isSet={present.includes('NOTION_DATABASE_ID')} onChange={v => setField('NOTION_DATABASE_ID', v)} />
+              <CredField label="Integration Token" name="NOTION_TOKEN" value={fields.NOTION_TOKEN} placeholder="ntn_ or secret_…" type="password" isSet={present.includes('NOTION_TOKEN')} onChange={v => setField('NOTION_TOKEN', v)} T={T} />
+              <CredField label="Database ID" name="NOTION_DATABASE_ID" value={fields.NOTION_DATABASE_ID} placeholder="xxxx…" isSet={present.includes('NOTION_DATABASE_ID')} onChange={v => setField('NOTION_DATABASE_ID', v)} T={T} />
             </div>
           </div>
 
@@ -316,9 +293,9 @@ export default function Setup({ onDone }: Props) {
               <div style={{ fontWeight: 600, fontSize: '0.95rem', color: T.text }}>Anthropic</div>
               <div style={{ fontSize: '0.8rem', color: T.muted, marginTop: 3 }}>Demo benchmarks</div>
             </div>
-            <div><StatusDot ok={anthropicOk} label={anthropicOk ? 'Set' : 'Not set'} /></div>
+            <div><StatusDot ok={anthropicOk} label={anthropicOk ? 'Set' : 'Not set'} T={T} /></div>
             <div style={{ display: 'flex', gap: 12 }}>
-              <CredField label="API Key" name="ANTHROPIC_API_KEY" value={fields.ANTHROPIC_API_KEY} placeholder="sk-ant-…" type="password" isSet={anthropicOk} onChange={v => setField('ANTHROPIC_API_KEY', v)} />
+              <CredField label="API Key" name="ANTHROPIC_API_KEY" value={fields.ANTHROPIC_API_KEY} placeholder="sk-ant-…" type="password" isSet={anthropicOk} onChange={v => setField('ANTHROPIC_API_KEY', v)} T={T} />
             </div>
           </div>
         </div>

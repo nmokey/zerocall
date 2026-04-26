@@ -155,3 +155,32 @@ export function runTrace(prompt: string): Promise<TraceResult> {
     body: JSON.stringify({ prompt }),
   });
 }
+
+// ─── Adaptive ─────────────────────────────────────────────────────────────────
+
+export interface AdaptiveSuggestion {
+  section: 'calendar' | 'email' | 'tasks';
+  action: 'disable';
+  relevanceScore: number;
+  projectedTokenSavings: number;
+}
+
+export interface AdaptiveStats {
+  queryCount: number;
+  categoryDistribution: Record<string, number>;
+  sectionRelevance: Record<string, number>;
+  currentConfig: Record<'calendar' | 'email' | 'tasks', boolean>;
+  suggestions: AdaptiveSuggestion[];
+}
+
+export function getAdaptiveStats(): Promise<AdaptiveStats> {
+  return apiFetch('/api/adaptive/stats');
+}
+
+export function applyAdaptiveSection(section: string, enabled: boolean): Promise<{ ok: true }> {
+  return apiFetch('/api/adaptive/apply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section, enabled }),
+  });
+}
