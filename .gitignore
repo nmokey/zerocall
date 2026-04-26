@@ -7,9 +7,9 @@ tokens.json
 *.sqlite
 
 
-onecall.db
-onecall.db-shm
-onecall.db-wal
+zerocall.db
+zerocall.db-shm
+zerocall.db-wal
 tokens.json
 
 secrets/

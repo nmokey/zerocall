@@ -1,7 +1,7 @@
 import { readRecentQueries } from '../db/queryLog.js';
 import { readAdaptiveConfig, type SectionConfig } from '../db/adaptiveConfig.js';
 import { readLatestSnapshot } from '../db/snapshot.js';
-import type { WorkStateSnapshot } from '@onecall/harness';
+import type { WorkStateSnapshot } from '@zerocall/harness';
 
 export interface AdaptiveSuggestion {
   section: keyof SectionConfig;

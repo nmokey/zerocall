@@ -1,4 +1,4 @@
-import type { Task } from '@onecall/harness';
+import type { Task } from '@zerocall/harness';
 
 export interface TaskProvider {
   name: 'notion' | 'linear' | 'todoist';

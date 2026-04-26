@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { runTrace } from '../shared/trace.js';
-import { runWithoutOneCall } from './agents/without.js';
-import { runWithOneCall } from './agents/with.js';
+import { runWithoutZeroCall } from './agents/without.js';
+import { runWithZeroCall } from './agents/with.js';
 
-runTrace('OneCall Live Trace', { runWithoutOneCall, runWithOneCall })
+runTrace('ZeroCall Live Trace', { runWithoutZeroCall, runWithZeroCall })
   .catch(err => { console.error(err); process.exit(1); });

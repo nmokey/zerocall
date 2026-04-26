@@ -430,14 +430,14 @@ export default function Trace() {
 
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <AgentPanel
-              label="WITHOUT OneCall  (raw tool calls)"
+              label="WITHOUT ZeroCall  (raw tool calls)"
               accent={T.withoutAccent}
               run={stream.without}
               liveToolCalls={stream.liveToolCalls}
               waiting={loading && stream.liveToolCalls.length === 0}
             />
             <AgentPanel
-              label="WITH OneCall  (harness injection)"
+              label="WITH ZeroCall  (harness injection)"
               accent={T.withAccent}
               run={stream.with}
             />

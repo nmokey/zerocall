@@ -108,5 +108,5 @@ All credentials are required. On first `npm start`, follow the OAuth URL printed
 | File | Description | Gitignored |
 |------|-------------|------------|
 | `tokens.json` | Google OAuth2 access + refresh tokens | Yes |
-| `onecall.db` | SQLite database with snapshots and sync log | Yes |
+| `zerocall.db` | SQLite database with snapshots and sync log | Yes |
 | `dist/` | Compiled JavaScript output | Yes |

@@ -1,4 +1,4 @@
-# OneCall
+# ZeroCall
 ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-D97757?logo=anthropic)
 ![Railway](https://img.shields.io/badge/Railway-deployed-brightgreen?logo=railway)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
@@ -8,7 +8,7 @@
 
 Zero tool calls. One LLM turn. Context already there.
 
-Try it live: **[onecall.nmokey.com](https://onecall.nmokey.com)**
+Try it live: **[zerocall.nmokey.com](https://zerocall.nmokey.com)**
 
 ---
 
@@ -20,10 +20,10 @@ Work state doesn't change that fast, but agents act like it does.
 
 ## The Fix
 
-OneCall is an **agent harness** that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt — before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
+ZeroCall is an **agent harness** that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt — before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
-**Before OneCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query  
-**After OneCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
+**Before ZeroCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query  
+**After ZeroCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
 
 The key insight: we didn't give Claude a better tool. We changed what Claude knows before it starts thinking.
 
@@ -37,12 +37,12 @@ A node-cron loop polls Gmail, Google Calendar, and Notion every 15 minutes, dist
 
 ### Layer 2: Harness-level injection
 
-`OneCallAnthropic` subclasses the Anthropic SDK client and overrides `prepareOptions()` — a lifecycle hook that fires before every request is sent. On every `messages.create()` call, it reads the latest snapshot from SQLite (sub-millisecond) and splices it into the `system` prompt as a compact plain-text block. The calling code passes no tools and no system prompt; injection is invisible.
+`ZeroCallAnthropic` subclasses the Anthropic SDK client and overrides `prepareOptions()` — a lifecycle hook that fires before every request is sent. On every `messages.create()` call, it reads the latest snapshot from SQLite (sub-millisecond) and splices it into the `system` prompt as a compact plain-text block. The calling code passes no tools and no system prompt; injection is invisible.
 
 ```typescript
-import { OneCallAnthropic } from '@onecall/harness';
+import { ZeroCallAnthropic } from '@zerocall/harness';
 
-const client = new OneCallAnthropic({
+const client = new ZeroCallAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
   snapshotGetter: readLatestSnapshot,
 });
@@ -57,13 +57,13 @@ const response = await client.messages.create({
 
 ### Layer 3: Adaptive System Prompt Manager
 
-OneCall observes your query patterns and learns which snapshot sections you actually need. After enough queries, it surfaces suggestions like "you almost never ask about email — disable that section and save ~180 tokens per query." One click applies the optimization; the next request gets a leaner system prompt with no behavior change for the sections that matter.
+ZeroCall observes your query patterns and learns which snapshot sections you actually need. After enough queries, it surfaces suggestions like "you almost never ask about email — disable that section and save ~180 tokens per query." One click applies the optimization; the next request gets a leaner system prompt with no behavior change for the sections that matter.
 
 Classification is purely lexical — no extra LLM call. The suggestion engine computes per-section relevance from your query history and flags sections below 15% relevance.
 
 ### Layer 4: React dashboard + live trace
 
-The server serves a Vite + React frontend. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts a **live trace runner**: type any productivity prompt and watch both agents run in parallel — the OneCall agent's response pops in immediately while the raw-tool agent's tool calls stream in one by one in real time.
+The server serves a Vite + React frontend. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts a **live trace runner**: type any productivity prompt and watch both agents run in parallel — the ZeroCall agent's response pops in immediately while the raw-tool agent's tool calls stream in one by one in real time.
 
 ---
 
@@ -142,8 +142,8 @@ healthcheckPath = "/api/status"
 
 ## Built at LA Hacks 2026
 
-<a href="https://github.com/nmokey/onecall/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=nmokey/onecall" />
+<a href="https://github.com/nmokey/zerocall/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=nmokey/zerocall" />
 </a>
 
 Targeting the **Flicker to Flow** (Figma) and **Augment the Agent** (Cognition) tracks.

@@ -1,4 +1,4 @@
-# OneCall Wiki
+# ZeroCall Wiki
 
 **Your AI assistant reads the room before you ask.**
 
@@ -6,12 +6,12 @@ Zero tool calls. One LLM turn. Context already there.
 
 ---
 
-## What is OneCall?
+## What is ZeroCall?
 
-OneCall is an **agent harness** that eliminates the tool-call overhead of productivity agents. Instead of letting a model fetch calendar, email, and task data on every query, OneCall pre-syncs that data in the background and injects it into the system prompt before the model's first token.
+ZeroCall is an **agent harness** that eliminates the tool-call overhead of productivity agents. Instead of letting a model fetch calendar, email, and task data on every query, ZeroCall pre-syncs that data in the background and injects it into the system prompt before the model's first token.
 
-**Before OneCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query
-**After OneCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
+**Before ZeroCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query
+**After ZeroCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
 
 The key insight: we didn't give Claude a better tool. We changed what Claude knows before it starts thinking.
 
@@ -22,7 +22,7 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 | Page | Description |
 |------|-------------|
 | [Architecture](Architecture.md) | Two-layer design: background sync + harness injection |
-| [Harness Injection](Harness-Injection.md) | Deep dive into `OneCallAnthropic` and `prepareOptions` |
+| [Harness Injection](Harness-Injection.md) | Deep dive into `ZeroCallAnthropic` and `prepareOptions` |
 | [Data Types](Data-Types.md) | `WorkStateSnapshot` and all sub-interfaces |
 | [Providers](Providers.md) | Gmail, Google Calendar, and Notion integrations |
 | [Database](Database.md) | SQLite schema, snapshot persistence, sync logging |
@@ -30,7 +30,7 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 | [Authentication](Authentication.md) | Google OAuth2 flow and token management |
 | [Demo and Benchmarking](Demo-and-Benchmarking.md) | Running demo scripts, evaluation methodology, metrics |
 | [Configuration](Configuration.md) | Environment variables and setup guide |
-| [Extending OneCall](Extending-OneCall.md) | Adding new providers via the `TaskProvider` interface |
+| [Extending ZeroCall](Extending-ZeroCall.md) | Adding new providers via the `TaskProvider` interface |
 
 ---
 

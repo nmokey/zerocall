@@ -79,7 +79,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#ece8dc', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <nav style={NAV}>
-        <span style={NAV_TITLE}>OneCall</span>
+        <span style={NAV_TITLE}>ZeroCall</span>
         <NavLink label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} />
         {isReady && <NavLink label="Trace" active={page === 'trace'} onClick={() => setPage('trace')} />}
       </nav>

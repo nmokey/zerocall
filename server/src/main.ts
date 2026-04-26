@@ -9,11 +9,11 @@ async function main() {
 
   const app = createApiServer();
   app.listen(PORT, () => {
-    console.log(`[onecall] running at http://localhost:${PORT}`);
+    console.log(`[zerocall] running at http://localhost:${PORT}`);
   });
 }
 
 main().catch(err => {
-  console.error('[onecall] fatal:', err);
+  console.error('[zerocall] fatal:', err);
   process.exit(1);
 });

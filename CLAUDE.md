@@ -1,6 +1,6 @@
-# OneCall — Claude Code Agent System Prompt
+# ZeroCall — Claude Code Agent System Prompt
 
-You are a senior TypeScript engineer working on **OneCall**, a hackathon project for LA Hacks 2026. This document is your complete specification — read it fully before writing a single line of code.
+You are a senior TypeScript engineer working on **ZeroCall**, a hackathon project for LA Hacks 2026. This document is your complete specification — read it fully before writing a single line of code.
 
 ---
 
@@ -19,7 +19,7 @@ You are a senior TypeScript engineer working on **OneCall**, a hackathon project
 
 ## Project Identity
 
-**Name:** OneCall
+**Name:** ZeroCall
 **Tagline:** *"Your AI assistant reads the room before you ask."*
 **One-line pitch:** Zero tool calls. One LLM turn. Context already there.
 
@@ -30,10 +30,10 @@ Productivity agents are stateless by default. Every invocation — *"what should
 An agent harness that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
 **The key insight (from Cognition feedback):**
-Traditional approaches expose work context through tools that the model must decide to call — that's just a better tool, not a paradigm shift. OneCall injects context at the harness level: `OneCallAnthropic` overrides `prepareOptions()` in the Anthropic SDK and splices the snapshot into every `system` prompt automatically. The model never needs to ask for it.
+Traditional approaches expose work context through tools that the model must decide to call — that's just a better tool, not a paradigm shift. ZeroCall injects context at the harness level: `ZeroCallAnthropic` overrides `prepareOptions()` in the Anthropic SDK and splices the snapshot into every `system` prompt automatically. The model never needs to ask for it.
 
 **Second insight (Cognition follow-up feedback — Adaptive System Prompt Manager):**
-Pre-deciding what data to inject means injecting things users don't need. OneCall now observes query patterns over time and learns which snapshot sections a given user actually asks about. Sections with low relevance (<15%) are surfaced as disable suggestions in the dashboard with projected token savings. One click applies the config; future requests inject only the sections that matter.
+Pre-deciding what data to inject means injecting things users don't need. ZeroCall now observes query patterns over time and learns which snapshot sections a given user actually asks about. Sections with low relevance (<15%) are surfaced as disable suggestions in the dashboard with projected token savings. One click applies the config; future requests inject only the sections that matter.
 
 ---
 
@@ -41,13 +41,13 @@ Pre-deciding what data to inject means injecting things users don't need. OneCal
 
 ### Overview
 
-OneCall has four layers:
+ZeroCall has four layers:
 
 **Layer 1: Background sync** — A node-cron loop polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to SQLite. `ensureFreshSnapshot()` provides a lazy-cache on top: it returns the in-memory snapshot if under 15 minutes old, otherwise triggers a fresh sync. This is used by live agents so they don't wait for a cold start.
 
-**Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
+**Layer 2: Harness injection** — `ZeroCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
 
-**Layer 3: Adaptive System Prompt Manager** — Every query through `OneCallAnthropic` is optionally logged (via `queryLogger` callback) and classified into `calendar | email | tasks | general` using keyword heuristics. The `computeAdaptiveStats()` function computes per-section relevance from specific-category queries only (`general` is excluded from the denominator so it doesn't inflate scores). Sections below 15% relevance are surfaced as suggestions. `setAdaptiveSection()` writes the config to SQLite; `readAdaptiveConfig()` is called on every request to filter the snapshot before formatting.
+**Layer 3: Adaptive System Prompt Manager** — Every query through `ZeroCallAnthropic` is optionally logged (via `queryLogger` callback) and classified into `calendar | email | tasks | general` using keyword heuristics. The `computeAdaptiveStats()` function computes per-section relevance from specific-category queries only (`general` is excluded from the denominator so it doesn't inflate scores). Sections below 15% relevance are surfaced as suggestions. `setAdaptiveSection()` writes the config to SQLite; `readAdaptiveConfig()` is called on every request to filter the snapshot before formatting.
 
 **Layer 4: HTTP API + React dashboard** — An Express server runs on port 3000 and serves the Vite + React frontend from `web/dist/`. The dashboard handles first-run setup (credential entry + Google OAuth), shows snapshot and sync status, a live Trace panel (POST /api/trace), and the Adaptive Optimization card.
 
@@ -58,17 +58,17 @@ State delivery is exclusively through harness injection — never tool calls.
 ### Repository Structure
 
 ```
-onecall/
-├── harness/                   # @onecall/harness — SDK subclass + shared types
+zerocall/
+├── harness/                   # @zerocall/harness — SDK subclass + shared types
 │   ├── src/
 │   │   ├── index.ts           # Package entry point (re-exports)
-│   │   ├── client.ts          # OneCallAnthropic — prepareOptions, filterSnapshot, formatSnapshot
+│   │   ├── client.ts          # ZeroCallAnthropic — prepareOptions, filterSnapshot, formatSnapshot
 │   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
 │   ├── package.json
 │   └── tsconfig.json
 ├── server/                    # Lazy-cached sync + Express API
 │   ├── src/
-│   │   ├── index.ts           # Public API surface for @onecall/server (re-exports)
+│   │   ├── index.ts           # Public API surface for @zerocall/server (re-exports)
 │   │   ├── main.ts            # Entrypoint: initSchema + HTTP server
 │   │   ├── env.ts             # Loads .env relative to server root
 │   │   ├── api/
@@ -92,7 +92,7 @@ onecall/
 │   │   ├── analytics/
 │   │   │   └── suggestions.ts # computeAdaptiveStats() — relevance scoring + suggestions
 │   │   ├── trace/
-│   │   │   ├── agents.ts      # runWithoutOneCall + runWithOneCall (live API calls)
+│   │   │   ├── agents.ts      # runWithoutZeroCall + runWithZeroCall (live API calls)
 │   │   │   └── runner.ts      # runTraceComparison() → TraceResult for /api/trace
 │   │   └── auth/
 │   │       └── google.ts      # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
@@ -114,21 +114,21 @@ onecall/
 │   ├── data/mock.ts           # Static WorkStateSnapshot + raw provider slices
 │   ├── agents/
 │   │   ├── without.ts         # Multi-turn agent with raw Gmail/Calendar/Notion tools (mock)
-│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock snapshot)
+│   │   └── with.ts            # Single-turn agent using ZeroCallAnthropic (mock snapshot)
 │   ├── adaptive-benchmark.ts  # Two-phase adaptive demo: log → analyze → optimize
 │   ├── trace.ts               # Single-prompt color-coded side-by-side trace
 │   └── benchmark.ts           # Sequential 20-prompt run → metrics table + summary
 ├── live/                      # Live-data evaluation scripts
 │   ├── agents/
 │   │   ├── without.ts         # Real-API tool agent (Google + Notion live calls)
-│   │   └── with.ts            # Re-exports runWithOneCall from @onecall/server
+│   │   └── with.ts            # Re-exports runWithZeroCall from @zerocall/server
 │   ├── trace.ts               # Thin wrapper → shared/trace.ts
 │   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
 ├── shared/                    # Logic shared between demo/ and live/
 │   ├── trace.ts               # Color-coded terminal trace runner
 │   ├── benchmark.ts           # 20-prompt metrics table runner
 │   ├── agentLoop.ts           # Generic agentic tool-use loop
-│   ├── runWith.ts             # createRunWithOneCall() — accepts queryLogger + configGetter
+│   ├── runWith.ts             # createRunWithZeroCall() — accepts queryLogger + configGetter
 │   ├── prompts.ts             # 20 representative productivity prompts
 │   └── types.ts               # AgentRun + ToolCallRecord types
 ├── scripts/
@@ -143,10 +143,10 @@ onecall/
 
 ### The Harness: `harness/src/client.ts`
 
-The centrepiece of the project. `OneCallAnthropic` extends the Anthropic SDK client:
+The centrepiece of the project. `ZeroCallAnthropic` extends the Anthropic SDK client:
 
 ```typescript
-export class OneCallAnthropic extends Anthropic {
+export class ZeroCallAnthropic extends Anthropic {
   constructor(opts: ConstructorParameters<typeof Anthropic>[0] & {
     snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
     configGetter?: () => SectionConfig | null;   // adaptive section enable flags
@@ -444,7 +444,7 @@ demo/
 ├── data/mock.ts              # Static WorkStateSnapshot + raw provider slices
 ├── agents/
 │   ├── without.ts            # Multi-turn agent with 4 raw tools (mock responses)
-│   └── with.ts               # Single-turn agent using OneCallAnthropic (mock snapshot)
+│   └── with.ts               # Single-turn agent using ZeroCallAnthropic (mock snapshot)
 ├── adaptive-benchmark.ts     # Two-phase adaptive demo (see below)
 ├── trace.ts                  # Single-prompt color-coded side-by-side trace
 └── benchmark.ts              # Sequential 20-prompt run → metrics table + summary
@@ -471,12 +471,12 @@ Self-contained two-phase demo — no server or SQLite needed, runs entirely in m
 
 ## Demo Script (for judges)
 
-The primary demo surface is the **web app at [onecall.nmokey.com](https://onecall.nmokey.com)** — no terminal needed.
+The primary demo surface is the **web app at [zerocall.nmokey.com](https://zerocall.nmokey.com)** — no terminal needed.
 
 **Story 1 — Zero tool calls (Live Trace page):**
 - Navigate to the Trace page → type *"What should I focus on right now?"* → click Run Trace
-- Watch the WITH OneCall panel pop in immediately (0 tool calls, 1 LLM turn, ~6s)
-- Watch the WITHOUT OneCall panel stream its tool calls one by one in real time, still loading
+- Watch the WITH ZeroCall panel pop in immediately (0 tool calls, 1 LLM turn, ~6s)
+- Watch the WITHOUT ZeroCall panel stream its tool calls one by one in real time, still loading
 - The big % reduction numbers appear at the top once both finish
 - Punchline: "We didn't give Claude a better tool. We changed what Claude knows before it starts thinking."
 

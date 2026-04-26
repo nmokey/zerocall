@@ -27,8 +27,8 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 /** Agent function signatures that demo/ and live/ each provide. */
 export interface BenchmarkAgents {
-  runWithoutOneCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
-  runWithOneCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
+  runWithoutZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
+  runWithZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
 }
 
 /**
@@ -63,8 +63,8 @@ export async function runBenchmark(agents: BenchmarkAgents): Promise<void> {
     process.stdout.write(`  [${prompt.id}] ${prompt.text.slice(0, 50)}...`);
 
     const [without, with_] = await Promise.all([
-      agents.runWithoutOneCall(client, prompt.text),
-      agents.runWithOneCall(client, prompt.text),
+      agents.runWithoutZeroCall(client, prompt.text),
+      agents.runWithZeroCall(client, prompt.text),
     ]);
 
     results.push({

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(__dirname, '../../');
-const DB_PATH = path.join(DATA_DIR, 'onecall.db');
+const DB_PATH = path.join(DATA_DIR, 'zerocall.db');
 
 let instance: Database.Database | null = null;
 

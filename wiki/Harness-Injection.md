@@ -1,18 +1,18 @@
 # Harness Injection
 
-The harness is the centrepiece of OneCall. It intercepts every outgoing Anthropic API request and injects the current work context into the system prompt before the request leaves the process.
+The harness is the centrepiece of ZeroCall. It intercepts every outgoing Anthropic API request and injects the current work context into the system prompt before the request leaves the process.
 
 ---
 
-## OneCallAnthropic
+## ZeroCallAnthropic
 
-`OneCallAnthropic` extends the Anthropic SDK's `Anthropic` class:
+`ZeroCallAnthropic` extends the Anthropic SDK's `Anthropic` class:
 
 ```typescript
 import Anthropic from '@anthropic-ai/sdk';
 import type { WorkStateSnapshot } from './types/snapshot.js';
 
-export class OneCallAnthropic extends Anthropic {
+export class ZeroCallAnthropic extends Anthropic {
   private readonly snapshotGetter: () => WorkStateSnapshot | null;
 
   constructor(
@@ -50,7 +50,7 @@ export class OneCallAnthropic extends Anthropic {
 
 ### The `prepareOptions` Hook
 
-The Anthropic SDK calls `prepareOptions()` before every outgoing HTTP request, while `options` is still a mutable plain JS object. OneCall's override:
+The Anthropic SDK calls `prepareOptions()` before every outgoing HTTP request, while `options` is still a mutable plain JS object. ZeroCall's override:
 
 1. **Scopes to messages only** — checks `options.method === 'post'` and `options.path` contains `/messages`. Other endpoints (completions, embeddings, etc.) are left untouched.
 
@@ -81,7 +81,7 @@ The snapshot source is injected at construction time, decoupling the harness fro
 ### Output Format
 
 ```
---- ONECALL WORK CONTEXT (as of 2026-04-24T09:00:00Z) ---
+--- ZEROCALL WORK CONTEXT (as of 2026-04-24T09:00:00Z) ---
 
 [CALENDAR TODAY]
   • 10:00–11:00  Arvind Lab Meeting  (Boelter 4760)  https://zoom.us/j/123456789
@@ -115,7 +115,7 @@ The snapshot source is injected at construction time, decoupling the harness fro
   • Implement attention visualization module
   • Reproduce baseline results from prior paper
 
---- END ONECALL CONTEXT ---
+--- END ZEROCALL CONTEXT ---
 ```
 
 ### Sections
@@ -141,10 +141,10 @@ The snapshot source is injected at construction time, decoupling the harness fro
 ## Usage Example
 
 ```typescript
-import { OneCallAnthropic } from './src/client.js';
+import { ZeroCallAnthropic } from './src/client.js';
 import { readLatestSnapshot } from './src/db/snapshot.js';
 
-const client = new OneCallAnthropic({
+const client = new ZeroCallAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
   snapshotGetter: readLatestSnapshot,
 });

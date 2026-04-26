@@ -165,15 +165,15 @@ export function createApiServer(): express.Express {
       if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
 
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
-      const { runWithoutOneCall, runWithOneCall } = await import('../trace/agents.js');
+      const { runWithoutZeroCall, runWithZeroCall } = await import('../trace/agents.js');
 
       const client = new Anthropic({ apiKey });
 
       // Race both agents — each sends its event as soon as it resolves.
-      // runWithoutOneCall emits a 'tool_call' event for each tool as it completes.
+      // runWithoutZeroCall emits a 'tool_call' event for each tool as it completes.
       await Promise.all([
-        runWithoutOneCall(client, prompt, record => send('tool_call', record)).then(run => send('without', run)),
-        runWithOneCall(client, prompt).then(run => send('with', run)),
+        runWithoutZeroCall(client, prompt, record => send('tool_call', record)).then(run => send('without', run)),
+        runWithZeroCall(client, prompt).then(run => send('with', run)),
       ]);
 
       send('done', {});

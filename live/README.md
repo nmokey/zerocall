@@ -1,4 +1,4 @@
-# OneCall Live Scripts
+# ZeroCall Live Scripts
 
 Same scripts as [`demo/`](../demo/README.md), but running against your real Gmail, Google Calendar, and Notion data instead of mocked fixtures.
 
@@ -58,7 +58,7 @@ npm run live:trace -- --prompt "Can I squeeze in a workout today?"
 **Sample output:**
 
 ```
-WITHOUT OneCall  (raw tool calls)
+WITHOUT ZeroCall  (raw tool calls)
 ────────────────────────────────────────────────────────────
   1. gmail_search_threads {"query":"newer_than:2d"}  1842ms
   2. gmail_get_thread {"thread_id":"..."}  923ms
@@ -67,7 +67,7 @@ WITHOUT OneCall  (raw tool calls)
 
   Total latency: 8340ms   Tokens: 3820   Tool calls: 4
 
-WITH OneCall  (harness injection)
+WITH ZeroCall  (harness injection)
 ────────────────────────────────────────────────────────────
   ✦ Work context auto-injected into system prompt
   (0 tool calls — harness injected the snapshot before first token)

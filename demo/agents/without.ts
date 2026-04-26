@@ -99,7 +99,7 @@ function handleToolCall(name: string, input: Record<string, unknown>): unknown {
   }
 }
 
-export async function runWithoutOneCall(
+export async function runWithoutZeroCall(
   client: Anthropic,
   prompt: string,
 ) {

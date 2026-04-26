@@ -5,7 +5,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentRun } from './agents.js';
-import { runWithoutOneCall, runWithOneCall } from './agents.js';
+import { runWithoutZeroCall, runWithZeroCall } from './agents.js';
 
 export type { AgentRun };
 
@@ -40,8 +40,8 @@ export async function runTraceComparison(prompt: string): Promise<TraceResult> {
 
   const client = new Anthropic({ apiKey });
   const [without, with_] = await Promise.all([
-    runWithoutOneCall(client, prompt),
-    runWithOneCall(client, prompt),
+    runWithoutZeroCall(client, prompt),
+    runWithZeroCall(client, prompt),
   ]);
 
   const withoutTokens = without.inputTokens + without.outputTokens;

@@ -1,6 +1,6 @@
 # Architecture
 
-OneCall has two layers that work together to eliminate tool-call overhead from productivity agents.
+ZeroCall has two layers that work together to eliminate tool-call overhead from productivity agents.
 
 ---
 
@@ -34,7 +34,7 @@ OneCall has two layers that work together to eliminate tool-call overhead from p
                        │    client.messages.create({ ... })      │
                        │       │                                 │
                        │       ▼                                 │
-                       │  OneCallAnthropic.prepareOptions()      │
+                       │  ZeroCallAnthropic.prepareOptions()      │
                        │       │                                 │
                        │    Reads latest snapshot from SQLite     │
                        │    Injects into options.body.system     │
@@ -64,7 +64,7 @@ See [Background Sync](Background-Sync.md) for details.
 
 ## Layer 2: Harness Injection
 
-`OneCallAnthropic` subclasses the Anthropic SDK's `Anthropic` client and overrides the `prepareOptions()` lifecycle hook. This hook fires before every outgoing request while `options.body` is still a plain JS object (not yet JSON-encoded).
+`ZeroCallAnthropic` subclasses the Anthropic SDK's `Anthropic` client and overrides the `prepareOptions()` lifecycle hook. This hook fires before every outgoing request while `options.body` is still a plain JS object (not yet JSON-encoded).
 
 On every `POST /v1/messages` request, the override:
 1. Reads the latest snapshot (sub-millisecond from SQLite)
@@ -89,7 +89,7 @@ The harness injection approach removes model agency from the retrieval decision 
 
 ## Request Flow Comparison
 
-### Without OneCall (traditional agent)
+### Without ZeroCall (traditional agent)
 
 ```
 User prompt → LLM turn 1 → tool_use: gmail_search_threads
@@ -101,7 +101,7 @@ User prompt → LLM turn 1 → tool_use: gmail_search_threads
 Result: 4–5 tool calls, 3 LLM turns, ~20s latency
 ```
 
-### With OneCall (harness injection)
+### With ZeroCall (harness injection)
 
 ```
 User prompt → prepareOptions() injects snapshot → LLM turn 1 → final text response

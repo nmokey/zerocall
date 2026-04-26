@@ -1,4 +1,4 @@
-import { createRunWithOneCall } from '../../shared/runWith.js';
+import { createRunWithZeroCall } from '../../shared/runWith.js';
 import { MOCK_SNAPSHOT } from '../data/mock.js';
 
-export const runWithOneCall = createRunWithOneCall(() => MOCK_SNAPSHOT);
+export const runWithZeroCall = createRunWithZeroCall(() => MOCK_SNAPSHOT);

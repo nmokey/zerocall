@@ -108,4 +108,4 @@ A placeholder for Gmail push notifications. Currently unimplemented:
 // TODO: implement (optional — Gmail push notification handler)
 ```
 
-When implemented, this would allow Gmail to push updates to OneCall via Google Cloud Pub/Sub instead of relying on polling, reducing the latency between an email arriving and it appearing in the snapshot.
+When implemented, this would allow Gmail to push updates to ZeroCall via Google Cloud Pub/Sub instead of relying on polling, reducing the latency between an email arriving and it appearing in the snapshot.

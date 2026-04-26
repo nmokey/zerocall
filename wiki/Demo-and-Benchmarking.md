@@ -1,6 +1,6 @@
 # Demo and Benchmarking
 
-OneCall includes two evaluation modes: a **demo** mode using mocked data (no credentials needed) and a **live** mode using real Gmail, Calendar, and Notion APIs.
+ZeroCall includes two evaluation modes: a **demo** mode using mocked data (no credentials needed) and a **live** mode using real Gmail, Calendar, and Notion APIs.
 
 ---
 
@@ -26,8 +26,8 @@ npm run demo:trace -- 7         # by prompt number (1–20)
 
 **What it shows:**
 
-1. **WITHOUT OneCall** — the raw-tool agent makes multiple tool calls across Gmail, Calendar, and Notion mock endpoints, requiring 3+ LLM turns
-2. **WITH OneCall** — the harness agent gets all context pre-injected, answering in 1 turn with 0 tool calls
+1. **WITHOUT ZeroCall** — the raw-tool agent makes multiple tool calls across Gmail, Calendar, and Notion mock endpoints, requiring 3+ LLM turns
+2. **WITH ZeroCall** — the harness agent gets all context pre-injected, answering in 1 turn with 0 tool calls
 3. **Result summary** — percentage reduction in tool calls, LLM turns, latency, and tokens
 
 ### `demo:benchmark` — 20-Prompt Metrics Table
@@ -88,7 +88,7 @@ npm run live:benchmark
 
 ## Agents
 
-### Without OneCall (`agents/without.ts`)
+### Without ZeroCall (`agents/without.ts`)
 
 A multi-turn agent loop with four raw tools:
 
@@ -108,11 +108,11 @@ The agent loop:
 **Demo mode:** Tool handlers return static mock data from `demo/data/mock.ts`.
 **Live mode:** Tool handlers call the real Gmail, Calendar, and Notion APIs.
 
-### With OneCall (`agents/with.ts`)
+### With ZeroCall (`agents/with.ts`)
 
-A single-turn agent using the `OneCallAnthropic` harness:
+A single-turn agent using the `ZeroCallAnthropic` harness:
 
-1. Constructs a `OneCallAnthropic` client with the appropriate `snapshotGetter`
+1. Constructs a `ZeroCallAnthropic` client with the appropriate `snapshotGetter`
 2. Sends the user prompt with no tools and no system prompt
 3. The harness injects the snapshot into the system prompt automatically
 4. Claude responds in one turn
@@ -157,7 +157,7 @@ The mock also exports flattened arrays (`MOCK_GMAIL_THREADS`, `MOCK_CALENDAR_EVE
 
 ### Single Prompt (demo:trace)
 
-| Metric | Without OneCall | With OneCall | Reduction |
+| Metric | Without ZeroCall | With ZeroCall | Reduction |
 |--------|----------------|-------------|-----------|
 | Tool calls | 5 | 0 | 100% |
 | LLM turns | 3 | 1 | 67% |

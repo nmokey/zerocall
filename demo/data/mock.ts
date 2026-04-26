@@ -1,4 +1,4 @@
-import type { WorkStateSnapshot } from '@onecall/harness';
+import type { WorkStateSnapshot } from '@zerocall/harness';
 
 export const MOCK_SNAPSHOT: WorkStateSnapshot = {
   as_of: '2026-04-24T09:00:00Z',
@@ -153,7 +153,7 @@ export const MOCK_SNAPSHOT: WorkStateSnapshot = {
   },
 };
 
-// Raw responses the "without OneCall" agent would need to make separately
+// Raw responses the "without ZeroCall" agent would need to make separately
 export const MOCK_GMAIL_THREADS = MOCK_SNAPSHOT.email.action_required.concat(
   MOCK_SNAPSHOT.email.awaiting_reply
 );

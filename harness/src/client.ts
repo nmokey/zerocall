@@ -8,7 +8,7 @@ export interface SectionConfig {
 }
 
 /**
- * OneCallAnthropic subclasses the Anthropic SDK client and overrides the
+ * ZeroCallAnthropic subclasses the Anthropic SDK client and overrides the
  * `prepareOptions` lifecycle hook to automatically inject the current
  * WorkStateSnapshot into the system prompt of every /v1/messages request.
  *
@@ -25,7 +25,7 @@ export interface SectionConfig {
  * @param queryLogger - Optional. Called with (queryText, category) after
  *   classifying the user's prompt. Used by live agents to persist query history.
  */
-export class OneCallAnthropic extends Anthropic {
+export class ZeroCallAnthropic extends Anthropic {
   private readonly snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
   private readonly configGetter?: () => SectionConfig | null;
   private readonly queryLogger?: (queryText: string) => void;
@@ -115,7 +115,7 @@ function filterSnapshot(s: WorkStateSnapshot, config: SectionConfig): WorkStateS
 }
 
 /**
- * Prepends (or creates) the OneCall context block in the system prompt.
+ * Prepends (or creates) the ZeroCall context block in the system prompt.
  * Sections that are disabled in config are suppressed entirely (no header).
  *
  * @param existing - The caller's system prompt, or undefined.
@@ -142,7 +142,7 @@ function injectSnapshot(
 function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
   const lines: string[] = [];
 
-  lines.push(`--- ONECALL WORK CONTEXT (as of ${s.as_of}) ---`);
+  lines.push(`--- ZEROCALL WORK CONTEXT (as of ${s.as_of}) ---`);
 
   if (config.calendar) {
     lines.push('\n[CALENDAR TODAY]');
@@ -230,7 +230,7 @@ function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
     }
   }
 
-  lines.push('\n--- END ONECALL CONTEXT ---');
+  lines.push('\n--- END ZEROCALL CONTEXT ---');
 
   return lines.join('\n');
 }
