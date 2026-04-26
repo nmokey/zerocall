@@ -94,6 +94,7 @@ const ThemeContext = createContext<ThemeCtx>({
 
 const STORAGE_KEY = 'onecall-theme';
 
+/** Reads the persisted theme mode from localStorage, defaulting to 'light'. */
 function readStored(): Mode {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
@@ -102,6 +103,7 @@ function readStored(): Mode {
   return 'light';
 }
 
+/** Manages theme state (light/dark) and provides tokens to the component tree via React context. */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>(readStored);
 
@@ -126,12 +128,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Consumer hook that returns the current theme mode, token object, and toggle function. */
 export function useTheme(): ThemeCtx {
   return useContext(ThemeContext);
 }
 
 // ─── Toggle button ──────────────────────────────────────────────────────────
 
+/** Renders a circular sun/moon button that toggles between light and dark mode. */
 export function ThemeToggle({ size = 28 }: { size?: number }) {
   const { mode, T, toggle } = useTheme();
   const isDark = mode === 'dark';

@@ -136,6 +136,7 @@ function MetricBadge({ label, value, color }: { label: string; value: string | n
   );
 }
 
+/** Tool call list — used both for live (in-progress) and completed states. */
 function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgress: boolean }) {
   const { T } = useTheme();
   if (calls.length === 0 && !inProgress) {
@@ -170,14 +171,17 @@ interface AgentPanelProps {
   label: string;
   accent: string;
   run: AgentRun | null;
+  /** Live tool calls streamed before the run completes (without-agent only). */
   liveToolCalls?: ToolCallRecord[];
+  /** True while the agent is still running but hasn't fired any tool calls yet. */
   waiting?: boolean;
 }
 
 function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }: AgentPanelProps) {
   const { T } = useTheme();
-  const isLive = !run;
+  const isLive = !run; // still running
 
+  // Pending — no data yet at all
   if (isLive && liveToolCalls.length === 0 && !waiting) {
     return (
       <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
@@ -191,6 +195,7 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
     );
   }
 
+  // Live view — agent still running, show accumulated tool calls
   if (isLive) {
     return (
       <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
@@ -205,6 +210,7 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
     );
   }
 
+  // Completed
   const totalTokens = run!.inputTokens + run!.outputTokens;
   return (
     <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card, animation: 'oc-fadein 0.35s ease' }}>
