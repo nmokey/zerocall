@@ -7,22 +7,27 @@ import { DARK, LIGHT, type Theme } from './theme';
 type Page = 'setup' | 'trace';
 type AppState = 'loading' | 'setup' | 'ready';
 
-function NavLink({ label, active, onClick, T }: { label: string; active: boolean; onClick: () => void; T: Theme }) {
+function Tab({ label, active, disabled, onClick, T }: { label: string; active: boolean; disabled?: boolean; onClick: () => void; T: Theme }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       style={{
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '0.85rem',
+        padding: '10px 32px',
+        fontSize: '0.95rem',
         fontWeight: active ? 600 : 400,
-        color: active ? T.navActiveText : T.navInactiveText,
-        padding: '4px 10px',
-        borderRadius: '5px',
-        background: active ? T.navActiveBg : 'none',
-        textDecoration: 'none',
-        transition: 'color 0.15s, background 0.15s',
-      } as React.CSSProperties}
+        color: active ? T.text : disabled ? T.dimmer : T.muted,
+        background: active ? T.bg : T.cardHead,
+        border: `1.5px solid ${T.border}`,
+        borderBottom: active ? `1.5px solid ${T.bg}` : `1.5px solid ${T.border}`,
+        borderRadius: '8px 8px 0 0',
+        cursor: disabled ? 'default' : 'pointer',
+        marginBottom: '-1.5px',
+        position: 'relative',
+        zIndex: active ? 1 : 0,
+        transition: 'color 0.15s',
+        whiteSpace: 'nowrap',
+      }}
     >
       {label}
     </button>
@@ -84,9 +89,7 @@ export default function App() {
           setAppState('setup');
         }
       })
-      .catch(() => {
-        setAppState('setup');
-      });
+      .catch(() => setAppState('setup'));
   }, []);
 
   if (appState === 'loading') {
@@ -97,20 +100,16 @@ export default function App() {
     );
   }
 
+  const isReady = appState === 'ready';
+
   function onSetupDone() {
     setAppState('ready');
     setPage('trace');
   }
 
-  const isReady = appState === 'ready';
-
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", transition: 'background 0.2s' }}>
-      <nav style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '20px',
-        padding: '12px 32px',
+      <header style={{
         background: T.navBg,
         borderBottom: `1.5px solid ${T.navBorder}`,
         position: 'sticky',
@@ -118,12 +117,28 @@ export default function App() {
         zIndex: 10,
         transition: 'background 0.2s, border-color 0.2s',
       }}>
-        <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em', color: T.navText, flex: 1 }}>
-          ZeroCall
-        </span>
-        <NavLink label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} T={T} />
-        {isReady && <NavLink label="Trace" active={page === 'trace'} onClick={() => setPage('trace')} T={T} />}
-      </nav>
+        {/* Tab strip + branding in one row */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          padding: '20px 28px 0',
+          gap: 8,
+        }}>
+          <Tab label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} T={T} />
+          <Tab label="Trace" active={page === 'trace'} disabled={!isReady} onClick={() => isReady && setPage('trace')} T={T} />
+          <span style={{ flex: 1 }} />
+          <span style={{
+            fontWeight: 700,
+            fontSize: '1.4rem',
+            letterSpacing: '-0.03em',
+            color: T.navText,
+            paddingBottom: 10,
+            userSelect: 'none',
+          }}>
+            ZeroCall
+          </span>
+        </div>
+      </header>
 
       {page === 'setup' && <Setup onDone={onSetupDone} T={T} />}
       {page === 'trace' && isReady && <Trace T={T} />}
