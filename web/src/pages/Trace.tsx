@@ -31,6 +31,57 @@ function Spinner() {
   );
 }
 
+// ─── Metrics bar graph ─────────────────────────────────────────────────────────
+
+function MetricsBarGraph({ result }: { result: TraceResult }) {
+  const { without, with: with_, deltas } = result;
+  const withoutTokens = without.inputTokens + without.outputTokens;
+  const withTokens = with_.inputTokens + with_.outputTokens;
+
+  const metrics = [
+    { label: 'Tool calls', without: without.toolCalls.length, with: with_.toolCalls.length, pct: deltas.toolCallsPct, unit: '' },
+    { label: 'LLM turns', without: without.llmTurns, with: with_.llmTurns, pct: deltas.llmTurnsPct, unit: '' },
+    { label: 'Latency', without: without.totalLatencyMs, with: with_.totalLatencyMs, pct: deltas.latencyPct, unit: 'ms' },
+    { label: 'Tokens', without: withoutTokens, with: withTokens, pct: deltas.tokensPct, unit: '' },
+  ];
+
+  function Bar({ value, max, accent, label }: { value: number; max: number; accent: string; label: string }) {
+    const height = max > 0 ? (value / max) * 100 : 0;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
+        <div style={{ width: '100%', height: 120, background: '#e8e4d8', borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: accent, transition: 'height 0.3s ease' }} />
+        </div>
+        <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{label}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 48, padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, maxWidth: 550, margin: '0 auto' }}>
+      <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 16 }}>Metrics comparison</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 16 }}>
+        {metrics.map(metric => {
+          const maxForMetric = Math.max(metric.without, metric.with);
+          return (
+            <div key={metric.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: T.text, textAlign: 'center', marginBottom: 4 }}>{metric.label}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Bar value={metric.without} max={maxForMetric} accent={T.withoutAccent} label="Without" />
+                <Bar value={metric.with} max={maxForMetric} accent={T.withAccent} label="With" />
+              </div>
+              <div style={{ fontSize: '0.75rem', color: T.success, fontWeight: 600, textAlign: 'center' }}>
+                {metric.pct}% fewer
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Agent run panel ──────────────────────────────────────────────────────────
 
 function MetricBadge({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -92,40 +143,6 @@ function AgentPanel({ label, run, accent }: { label: string; run: AgentRun; acce
         <MetricBadge label="Tokens" value={totalTokens} />
         <MetricBadge label="Tool calls" value={run.toolCalls.length} color={accent} />
         <MetricBadge label="LLM turns" value={run.llmTurns} />
-      </div>
-    </div>
-  );
-}
-
-// ─── Delta summary bar ────────────────────────────────────────────────────────
-
-function DeltaBar({ result }: { result: TraceResult }) {
-  const { without, with: with_, deltas } = result;
-  const withoutTokens = without.inputTokens + without.outputTokens;
-  const withTokens = with_.inputTokens + with_.outputTokens;
-
-  function Row({ label, from, to, pct, unit = '' }: { label: string; from: number; to: number; pct: number; unit?: string }) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
-        <span style={{ width: 120, fontSize: '0.82rem', color: T.muted, flexShrink: 0 }}>{label}</span>
-        <span style={{ color: T.withoutAccent, fontWeight: 600, fontSize: '0.875rem', width: 90, textAlign: 'right' }}>{from}{unit}</span>
-        <span style={{ color: T.muted, fontSize: '0.82rem' }}>→</span>
-        <span style={{ color: T.withAccent, fontWeight: 600, fontSize: '0.875rem', width: 90 }}>{to}{unit}</span>
-        <span style={{ fontWeight: 700, fontSize: '0.875rem', color: T.text }}>({pct}% {label.toLowerCase().includes('latency') || label.toLowerCase().includes('tokens') ? 'fewer' : 'fewer'})</span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginTop: 24, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 24px', background: T.cardHead, borderBottom: `1.5px solid ${T.border}` }}>
-        <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer }}>Result</span>
-      </div>
-      <div style={{ padding: '4px 24px 4px', background: T.card }}>
-        <Row label="Tool calls" from={without.toolCalls.length} to={with_.toolCalls.length} pct={deltas.toolCallsPct} />
-        <Row label="LLM turns" from={without.llmTurns} to={with_.llmTurns} pct={deltas.llmTurnsPct} />
-        <Row label="Latency" from={without.totalLatencyMs} to={with_.totalLatencyMs} pct={deltas.latencyPct} unit="ms" />
-        <Row label="Tokens" from={withoutTokens} to={withTokens} pct={deltas.tokensPct} />
       </div>
     </div>
   );
@@ -228,6 +245,9 @@ export default function Trace() {
       {/* Results */}
       {result && (
         <>
+          {/* Metrics bar graph */}
+          <MetricsBarGraph result={result} />
+
           <div style={{ marginBottom: 16, fontSize: '0.875rem', color: T.muted }}>
             Prompt: <span style={{ fontWeight: 600, color: T.text }}>"{result.prompt}"</span>
           </div>
@@ -245,9 +265,6 @@ export default function Trace() {
               accent={T.withAccent}
             />
           </div>
-
-          {/* Delta summary */}
-          <DeltaBar result={result} />
         </>
       )}
     </div>
