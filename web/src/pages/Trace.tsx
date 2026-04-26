@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun, TraceResult, ToolCallRecord } from '../api';
-import { getStatus } from '../api';
+import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord } from '../api';
+import { getStatus, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import type { Theme } from '../theme';
 
 // ─── Animations ───────────────────────────────────────────────────────────────
@@ -233,6 +233,184 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false, T
   );
 }
 
+// ─── Query classification bar ─────────────────────────────────────────────────
+
+const CATEGORY_COLORS: Record<string, string> = {
+  calendar: '#f59e0b',
+  email:    '#8b5cf6',
+  tasks:    '#10b981',
+  general:  '#94a3b8',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  calendar: 'Calendar',
+  email:    'Email',
+  tasks:    'Tasks',
+  general:  'General',
+};
+
+const SECTION_KEYS = ['calendar', 'email', 'tasks'] as const;
+
+function QueryClassificationBar({
+  stats,
+  onToggle,
+  T,
+}: {
+  stats: AdaptiveStats;
+  onToggle: (section: string, enabled: boolean) => void;
+  T: Theme;
+}) {
+  const { categoryDistribution, queryCount, currentConfig, sectionRelevance, suggestions } = stats;
+
+  const rows = (['calendar', 'email', 'tasks', 'general'] as const)
+    .map(cat => ({ cat, count: categoryDistribution[cat] ?? 0 }))
+    .filter(r => r.count > 0);
+
+  const suggestionSections = new Set(suggestions.map(s => s.section));
+
+  return (
+    <div style={{
+      padding: '20px 24px',
+      background: T.card,
+      border: `1.5px solid ${T.border}`,
+      borderRadius: 10,
+      marginTop: 28,
+      animation: 'oc-fadein 0.4s ease',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer }}>
+            Adaptive context
+          </span>
+          <span style={{ fontSize: '0.72rem', color: T.muted }}>
+            {queryCount} {queryCount === 1 ? 'query' : 'queries'} classified
+          </span>
+        </div>
+
+        {/* Section enable/disable toggles */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {SECTION_KEYS.map(sec => {
+            const enabled = currentConfig[sec] !== false;
+            const hasSuggestion = suggestionSections.has(sec);
+            const relevancePct = Math.round((sectionRelevance[sec] ?? 0) * 100);
+            const tokenSavings = suggestions.find(s => s.section === sec)?.projectedTokenSavings ?? 0;
+            return (
+              <button
+                key={sec}
+                onClick={() => onToggle(sec, !enabled)}
+                title={
+                  hasSuggestion
+                    ? `Only ${relevancePct}% of queries need this — click to disable and save ~${tokenSavings} tokens/req`
+                    : enabled
+                      ? `${CATEGORY_LABELS[sec]} context injecting — click to disable`
+                      : `${CATEGORY_LABELS[sec]} context disabled — click to enable`
+                }
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '3px 10px', borderRadius: 20,
+                  border: `1.5px solid ${hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.border}`,
+                  background: enabled ? `${CATEGORY_COLORS[sec]}18` : T.cardHead,
+                  color: hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.dimmer,
+                  fontSize: '0.72rem', fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: enabled ? CATEGORY_COLORS[sec] : T.border,
+                  flexShrink: 0, display: 'inline-block',
+                }} />
+                {CATEGORY_LABELS[sec]}
+                {!enabled && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}> off</span>}
+                {hasSuggestion && (
+                  <span style={{ fontSize: '0.65rem', marginLeft: 2 }}>↓{tokenSavings}t</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Horizontal bar chart */}
+      {rows.length === 0 ? (
+        <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>
+          No queries classified yet — run a trace to see your query breakdown.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {rows.map(({ cat, count }) => {
+            const pct = queryCount > 0 ? Math.round((count / queryCount) * 100) : 0;
+            const color = CATEGORY_COLORS[cat];
+            const isDisabled = cat !== 'general' && currentConfig[cat as 'calendar' | 'email' | 'tasks'] === false;
+            return (
+              <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{
+                  fontSize: '0.75rem', fontWeight: 600,
+                  color: isDisabled ? T.dimmer : T.muted,
+                  width: 60, flexShrink: 0,
+                  textDecoration: isDisabled ? 'line-through' : 'none',
+                }}>
+                  {CATEGORY_LABELS[cat]}
+                </span>
+                <div style={{ flex: 1, height: 12, background: T.barBg, borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${pct}%`,
+                    background: isDisabled ? T.dimmer : color,
+                    borderRadius: 6,
+                    transition: 'width 0.5s ease',
+                    opacity: isDisabled ? 0.4 : 1,
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: '0.75rem', fontWeight: 700,
+                  color: isDisabled ? T.dimmer : color,
+                  width: 36, flexShrink: 0, textAlign: 'right',
+                  opacity: isDisabled ? 0.5 : 1,
+                }}>
+                  {pct}%
+                </span>
+                <span style={{ fontSize: '0.72rem', color: T.dimmer, width: 20, flexShrink: 0, textAlign: 'right' }}>
+                  {count}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Suggestion callout */}
+      {suggestions.length > 0 && (
+        <div style={{
+          marginTop: 16, padding: '10px 14px',
+          background: T.errorBg, border: `1px solid ${T.errorBorder}`,
+          borderRadius: 8, fontSize: '0.8rem', color: T.error,
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <span style={{ fontWeight: 600 }}>Adaptive suggestion</span>
+          {suggestions.map(s => (
+            <div key={s.section} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span>
+                <b>{CATEGORY_LABELS[s.section]}</b> context is only relevant for {Math.round(s.relevanceScore * 100)}% of your queries — disable to save ~{s.projectedTokenSavings} tokens/request
+              </span>
+              <button
+                onClick={() => onToggle(s.section, false)}
+                style={{
+                  padding: '3px 12px', fontSize: '0.72rem', fontWeight: 600,
+                  border: `1px solid ${T.error}`, borderRadius: 5,
+                  background: 'transparent', color: T.error, cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                Disable
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Trace page ──────────────────────────────────────────────────────────
 
 const EXAMPLE_PROMPTS = [
@@ -261,6 +439,7 @@ export default function Trace({ T }: { T: Theme }) {
   const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
   const lastSyncRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -277,6 +456,22 @@ export default function Trace({ T }: { T: Theme }) {
     const id = setInterval(check, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Fetch adaptive stats on mount and after each trace completes.
+  const refreshAdaptiveStats = useCallback(async () => {
+    try {
+      setAdaptiveStats(await getAdaptiveStats());
+    } catch { /* ignore — server may not have any queries yet */ }
+  }, []);
+
+  useEffect(() => { refreshAdaptiveStats(); }, [refreshAdaptiveStats]);
+
+  async function handleToggle(section: string, enabled: boolean) {
+    try {
+      await applyAdaptiveSection(section, enabled);
+      await refreshAdaptiveStats();
+    } catch { /* ignore */ }
+  }
 
   async function handleRun(e: React.FormEvent) {
     e.preventDefault();
@@ -320,6 +515,8 @@ export default function Trace({ T }: { T: Theme }) {
           tokensPct:    pctReduction(withoutTokens,                withTokens),
         }} : s);
       }
+      // Refresh adaptive stats now that a new query has been logged.
+      refreshAdaptiveStats();
     });
 
     es.addEventListener('error', (e: MessageEvent) => {
@@ -423,6 +620,15 @@ export default function Trace({ T }: { T: Theme }) {
             />
           </div>
         </>
+      )}
+
+      {/* Adaptive context classification bar — shown whenever we have stats */}
+      {adaptiveStats && (
+        <QueryClassificationBar
+          stats={adaptiveStats}
+          onToggle={handleToggle}
+          T={T}
+        />
       )}
     </div>
   );
