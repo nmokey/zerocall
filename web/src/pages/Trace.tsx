@@ -269,8 +269,8 @@ function ToolCallTracePanel({ calls, inProgress, run, elapsed }: {
           );
         })}
 
-        {/* In-flight indicator */}
-        {inProgress && !isDone && (
+        {/* In-flight indicator — only when we already have calls and another is pending */}
+        {inProgress && !isDone && calls.length > 0 && (
           <div style={{ color: T.traceYellow, animation: 'oc-pulse 1.5s ease infinite' }}>
             <span style={{ color: T.traceDim }}>[{formatMs(elapsed)}]</span>{' '}
             <span style={{ color: T.traceYellow }}>TOOL</span>{' '}
