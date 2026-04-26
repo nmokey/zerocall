@@ -3,6 +3,7 @@ import { getStatus, triggerSync } from './api';
 import Setup from './pages/Setup';
 import Trace from './pages/Trace';
 import styles from './App.module.css';
+import logoSrc from './assets/zerocall_logo.png';
 
 type Page = 'setup' | 'trace';
 type AppState = 'loading' | 'setup' | 'ready';
@@ -137,7 +138,7 @@ export default function App() {
             <button onClick={handleSync} disabled={syncing} className={styles.syncButton}>
               {syncing ? 'Syncing\u2026' : 'Sync'}
             </button>
-            <span className={styles.branding}>ZeroCall</span>
+            <img src={logoSrc} alt="ZeroCall" className={styles.branding} />
           </div>
         </div>
       </header>
