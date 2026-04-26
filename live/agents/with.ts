@@ -1,1 +1,1 @@
-export { runWithOneCall } from '../../server/src/trace/agents.js';
+export { runWithOneCall } from '@onecall/server';
