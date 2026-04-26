@@ -31,9 +31,9 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 ## How It Works
 
-### Layer 1: Background sync
+### Layer 1: Lazy cache on demand
 
-A node-cron loop polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
+The system uses a lazy cache that is triggered by user prompts. It fetches data from Gmail, Google Calendar, Notion, and Slack, and distills raw API responses into a clean `WorkStateSnapshot`, caching it in a local SQLite database. The cache only repopulates when the stored info is deemed old.
 
 ### Layer 2: Harness-level injection
 
@@ -91,6 +91,7 @@ Open `http://localhost:3000` in your browser. Enter credentials in the Setup pag
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application). Set redirect URI to `http://localhost:3000/oauth2callback`. Enable Gmail API and Google Calendar API. Add your email as a test user under OAuth consent screen → Test users. |
 | `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret. Share your task database with the integration via the database's Connections menu. |
 | `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`). The Notion SDK's `client.request()` is broken in v5 — ZeroCall uses `fetch` directly against the REST API instead. |
+| `SLACK_USER_TOKEN` | [api.slack.com/apps](https://api.slack.com/apps) → Create New App → OAuth & Permissions → User Token Scopes. Add `im:read`, `im:history`, `mpim:read`, `mpim:history`, `users:read`. Install App to Workspace and copy the User OAuth Token. |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 
 ### 4. Connect Google
@@ -119,6 +120,7 @@ Run both simultaneously and open `http://localhost:5173`.
 - **Gmail** — classifies threads into `action_required` (inbound + unread) and `awaiting_reply` (outbound, sent >4h ago, no reply). Fetches threads modified in the last 48 hours.
 - **Google Calendar** — today's events, free blocks ≥30 min within working hours (default 9am–6pm, configurable), upcoming deadlines in the next 7 days.
 - **Notion** — queries your task database via direct REST API (`fetch`), bins tasks into overdue / due today / in progress by due date and status.
+- **Slack** — queries direct messages, classifying high-signal conversations into `action_required` and `awaiting_reply`.
 
 The `TaskProvider` interface makes Linear and Todoist drop-in additions.
 
