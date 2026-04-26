@@ -43,7 +43,7 @@ Pre-deciding what data to inject means injecting things users don't need. OneCal
 
 OneCall has four layers:
 
-**Layer 1: Lazy-cached sync** — `ensureFreshSnapshot()` checks if the cached snapshot is older than 15 minutes. If stale (or missing), it triggers a parallel fetch from Gmail, Google Calendar, and Notion, distills responses into a clean `WorkStateSnapshot`, and persists it to SQLite. There is no background polling loop — syncing is on-demand.
+**Layer 1: Background sync** — A node-cron loop polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to SQLite. `ensureFreshSnapshot()` provides a lazy-cache on top: it returns the in-memory snapshot if under 15 minutes old, otherwise triggers a fresh sync. This is used by live agents so they don't wait for a cold start.
 
 **Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
 
@@ -76,7 +76,7 @@ onecall/
 │   │   │   ├── config.ts      # Credential validation + .env writing
 │   │   │   └── setup.ts       # (legacy) server-rendered HTML setup page
 │   │   ├── sync/
-│   │   │   ├── scheduler.ts   # ensureFreshSnapshot() — lazy cache, syncs on demand
+│   │   │   ├── scheduler.ts   # node-cron polling loop + ensureFreshSnapshot() lazy cache
 │   │   │   └── syncAll.ts     # Orchestrates a full sync across all providers
 │   │   ├── providers/
 │   │   │   ├── types.ts       # TaskProvider interface
@@ -363,7 +363,7 @@ CREATE TABLE IF NOT EXISTS adaptive_config (
 
 `syncAll()` calls each provider in parallel (`Promise.allSettled`), merges results into a `WorkStateSnapshot`, and writes to SQLite. Errors from individual providers are caught and written to `meta.errors` — a Gmail failure should not block calendar data from being saved.
 
-`ensureFreshSnapshot()` in `scheduler.ts` implements lazy caching: returns the cached snapshot if it's under 15 minutes old, otherwise triggers a fresh `syncAll()` first. There is no background polling loop — syncing is purely on-demand when a snapshot is requested.
+`ensureFreshSnapshot()` in `scheduler.ts` implements lazy caching on top of the polling loop: returns the in-memory snapshot if it's under 15 minutes old, otherwise triggers a fresh `syncAll()`. Used by live agents so they never wait on a cold-start sync.
 
 ---
 
@@ -471,15 +471,18 @@ Self-contained two-phase demo — no server or SQLite needed, runs entirely in m
 
 ## Demo Script (for judges)
 
-**Story 1 — Zero tool calls:**
-- Without OneCall: ask Claude *"What should I focus on right now?"* → show 5 tool calls, 3 LLM turns, ~20s
-- With OneCall: same question → 0 tool calls, 1 LLM turn, ~6s, context already in system prompt
+The primary demo surface is the **web app at [onecall.nmokey.com](https://onecall.nmokey.com)** — no terminal needed.
+
+**Story 1 — Zero tool calls (Live Trace page):**
+- Navigate to the Trace page → type *"What should I focus on right now?"* → click Run Trace
+- Watch the WITH OneCall panel pop in immediately (0 tool calls, 1 LLM turn, ~6s)
+- Watch the WITHOUT OneCall panel stream its tool calls one by one in real time, still loading
+- The big % reduction numbers appear at the top once both finish
 - Punchline: "We didn't give Claude a better tool. We changed what Claude knows before it starts thinking."
 
-**Story 2 — Adaptive optimization:**
-- Run `demo:adaptive` → Phase 1 shows all-sections baseline tokens
-- Analysis panel: "email section only relevant for 8% of queries"
-- Phase 2 shows ~20% fewer tokens
+**Story 2 — Adaptive optimization (Setup page):**
+- After running several prompts, the Setup page surfaces suggestions like "email section only relevant for 8% of queries — disable to save ~180 tokens per request"
+- One click applies; the next trace shows a leaner system prompt
 - Punchline: "The system learned your workflow. Same answers, leaner prompt."
 
 ---

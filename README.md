@@ -1,10 +1,14 @@
 # OneCall
+![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-D97757?logo=anthropic)
 ![Railway](https://img.shields.io/badge/Railway-deployed-brightgreen?logo=railway)
-![Devin](https://img.shields.io/badge/made_with-Devin-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 
 **Your AI assistant reads the room before you ask.**
 
 Zero tool calls. One LLM turn. Context already there.
+
+Try it live: **[onecall.nmokey.com](https://onecall.nmokey.com)**
 
 ---
 
@@ -27,9 +31,9 @@ The key insight: we didn't give Claude a better tool. We changed what Claude kno
 
 ## How It Works
 
-### Layer 1: Lazy-cached sync
+### Layer 1: Background sync
 
-OneCall fetches Gmail, Google Calendar, and Notion in parallel using their REST APIs — no LLM involved. Results are distilled into a structured `WorkStateSnapshot` and persisted to a local SQLite database. Syncing is **lazy**: the server only fetches from sources when a snapshot is requested and the cache is stale (default: 15 minutes). There is no background polling loop.
+A node-cron loop polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
 
 ### Layer 2: Harness-level injection
 
@@ -57,9 +61,9 @@ OneCall observes your query patterns and learns which snapshot sections you actu
 
 Classification is purely lexical — no extra LLM call. The suggestion engine computes per-section relevance from your query history and flags sections below 15% relevance.
 
-### Layer 4: React dashboard
+### Layer 4: React dashboard + live trace
 
-The server serves a Vite + React frontend at `http://localhost:3000`. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts the Adaptive Optimization panel with one-click apply.
+The server serves a Vite + React frontend. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts a **live trace runner**: type any productivity prompt and watch both agents run in parallel — the OneCall agent's response pops in immediately while the raw-tool agent's tool calls stream in one by one in real time.
 
 ---
 
@@ -80,33 +84,33 @@ npm start
 
 ### 3. Configure credentials
 
-Open `http://localhost:3000` in your browser. Enter credentials section by section — each saves independently.
+Open `http://localhost:3000` in your browser. Enter credentials in the Setup page.
 
 | Credential | Where to get it |
 |---|---|
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application). Set redirect URI to `http://localhost:3000/oauth2callback`. Enable Gmail API and Google Calendar API. Add your email as a test user under OAuth consent screen → Test users. |
 | `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret. Share your task database with the integration via the database's Connections menu. |
 | `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`) |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys. Only needed for the demo/live benchmark scripts. |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 
 ### 4. Connect Google
 
-On the setup page, click **Connect Google Account**. After approving the OAuth consent screen, tokens are saved to `server/tokens.json`.
+On the setup page, click **Authorize →** next to Google. After approving the OAuth consent screen, tokens are saved automatically.
 
-If the browser OAuth flow doesn't work, use the CLI alternative:
+### 5. Sync and trace
 
-```bash
-npm run auth:google
-```
+Click **Sync now** on the Setup page, then navigate to **Trace** and run any productivity prompt.
 
 ---
 
 ## Development
 
 ```bash
-npm run dev        # server in watch/reload mode
-npm run dev:web    # Vite dev server with HMR (proxies /api/* to port 3000)
+npm run dev        # server in watch/reload mode (port 3000)
+npm run dev:web    # Vite dev server with HMR at localhost:5173 (proxies /api/* to port 3000)
 ```
+
+Run both simultaneously and open `http://localhost:5173`.
 
 ---
 
@@ -120,32 +124,26 @@ The `TaskProvider` interface makes Linear and Todoist drop-in additions.
 
 ---
 
-## Demo & Evaluation
+## Deployment
 
-The `demo/` directory contains evaluation scripts that use **mocked provider data** — no credentials needed, just `ANTHROPIC_API_KEY`.
+Deployed on Railway with a custom domain. Environment variables are set in Railway's dashboard; no `.env` file is committed.
 
-```bash
-npm run demo:trace                                       # default prompt
-npm run demo:trace -- p04                                # by prompt ID
-npm run demo:trace -- --prompt "Am I free at 3pm?"       # custom prompt
-npm run demo:benchmark                                   # all 20 prompts
-npm run demo:adaptive                                    # adaptive optimization demo
-```
+```toml
+# railway.toml
+[build]
+buildCommand = "npm run build"
 
-### Live evaluation
-
-The `live/` directory runs the same trace and benchmark against your **real** Gmail, Google Calendar, and Notion data. Requires credentials configured and `npm start` run at least once so the SQLite snapshot is populated.
-
-```bash
-npm run live:trace -- --prompt "What should I focus on today?"
-npm run live:benchmark
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/status"
 ```
 
 ---
 
 ## Built at LA Hacks 2026
+
 <a href="https://github.com/nmokey/onecall/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=nmokey/onecall" />
 </a>
-  
+
 Targeting the **Flicker to Flow** (Figma) and **Augment the Agent** (Cognition) tracks.
