@@ -1,0 +1,105 @@
+:root {
+  /* Base */
+  --zc-bg: #f5f7ff;
+  --zc-card: #ffffff;
+  --zc-card-head: #eef1fb;
+  --zc-border: #d0d8f0;
+
+  /* Primary */
+  --zc-primary: #3b6bef;
+  --zc-primary-hover: #2a56d4;
+
+  /* Text */
+  --zc-text: #111827;
+  --zc-muted: #6b7280;
+  --zc-dimmer: #9ca3af;
+  --zc-label: #374151;
+
+  /* Inputs */
+  --zc-input-bg: #ffffff;
+  --zc-locked-bg: #eef1fb;
+  --zc-locked-text: #6b7280;
+
+  /* Status */
+  --zc-success: #16a34a;
+  --zc-warn: #d97706;
+  --zc-error: #dc2626;
+  --zc-success-bg: #f0fdf4;
+  --zc-success-border: #86efac;
+  --zc-error-bg: #fef2f2;
+  --zc-error-border: #fca5a5;
+
+  /* Comparison accents */
+  --zc-without-accent: #dc2626;
+  --zc-with-accent: #2563eb;
+  --zc-bar-bg: #dbeafe;
+  --zc-latency-color: #7c3aed;
+
+  /* Table */
+  --zc-table-row-border: #e5e9f8;
+
+  /* Nav */
+  --zc-nav-bg: #ffffff;
+  --zc-nav-border: #d0d8f0;
+  --zc-nav-text: #111827;
+
+  /* Toggle */
+  --zc-toggle-bg: #eef1fb;
+  --zc-toggle-fg: #3b6bef;
+
+  /* Category colors */
+  --zc-cat-calendar: #f59e0b;
+  --zc-cat-email: #8b5cf6;
+  --zc-cat-tasks: #10b981;
+  --zc-cat-general: #94a3b8;
+
+  /* Shadows */
+  --zc-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+  /* Fonts */
+  --zc-font: 'Fira Code', monospace;
+  --zc-font-mono: 'SF Mono', 'Fira Code', monospace;
+}
+
+[data-theme="dark"] {
+  --zc-bg: #0d1117;
+  --zc-card: #161c27;
+  --zc-card-head: #1c2333;
+  --zc-border: #2a3650;
+
+  --zc-primary: #4d80f0;
+  --zc-primary-hover: #3b6bef;
+
+  --zc-text: #e2e8f0;
+  --zc-muted: #8b9ab2;
+  --zc-dimmer: #6b7a94;
+  --zc-label: #a8b8d0;
+
+  --zc-input-bg: #1c2333;
+  --zc-locked-bg: #151b28;
+  --zc-locked-text: #6b7a94;
+
+  --zc-success: #22c55e;
+  --zc-warn: #fbbf24;
+  --zc-error: #f87171;
+  --zc-success-bg: #052e16;
+  --zc-success-border: #166534;
+  --zc-error-bg: #2d0a0a;
+  --zc-error-border: #7f1d1d;
+
+  --zc-without-accent: #f87171;
+  --zc-with-accent: #60a5fa;
+  --zc-bar-bg: #1e3a5f;
+  --zc-latency-color: #a78bfa;
+
+  --zc-table-row-border: #1e293b;
+
+  --zc-nav-bg: #0d1117;
+  --zc-nav-border: #2a3650;
+  --zc-nav-text: #e2e8f0;
+
+  --zc-toggle-bg: #1c2333;
+  --zc-toggle-fg: #60a5fa;
+
+  --zc-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

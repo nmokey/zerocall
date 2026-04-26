@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
 import type { AgentRun, ToolCallRecord } from './types.js';
 
-/** Tool call handler — may be sync (demo/mock) or async (live/real APIs). */
+/** Tool call handler — may be sync (mock) or async (real APIs). */
 export type ToolCallHandler = (
   name: string,
   input: Record<string, unknown>,

@@ -185,8 +185,8 @@ export function createApiServer(): express.Express {
     }
   });
 
-  // Serve the React SPA in production (web/dist built by `npm run build -w web`)
-  const webDist = path.resolve(__dirname, '../../../web/dist');
+  // Serve the React SPA in production (frontend-demo/dist built by `npm run build -w frontend-demo`)
+  const webDist = path.resolve(__dirname, '../../../frontend-demo/dist');
   app.use(express.static(webDist));
   app.get('/*splat', (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'));

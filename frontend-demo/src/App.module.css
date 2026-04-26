@@ -1,0 +1,102 @@
+.app {
+  min-height: 100vh;
+  background: var(--zc-bg);
+  font-family: var(--zc-font);
+  transition: background 0.2s;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--zc-bg);
+  color: var(--zc-muted);
+  font-size: 0.9rem;
+}
+
+/* Header / Nav */
+.header {
+  background: var(--zc-nav-bg);
+  border-bottom: 1.5px solid var(--zc-nav-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.tabStrip {
+  display: flex;
+  align-items: flex-end;
+  padding: 20px 28px 0;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.branding {
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+  color: var(--zc-nav-text);
+  padding-bottom: 10px;
+  user-select: none;
+}
+
+/* Tab button */
+.tab {
+  padding: 10px 32px;
+  font-size: 0.95rem;
+  font-weight: 400;
+  font-family: inherit;
+  color: var(--zc-muted);
+  background: var(--zc-card-head);
+  border: 1.5px solid var(--zc-border);
+  border-bottom: 1.5px solid var(--zc-border);
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  margin-bottom: -1.5px;
+  position: relative;
+  z-index: 0;
+  transition: color 0.15s;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tab.active {
+  font-weight: 600;
+  color: var(--zc-text);
+  background: var(--zc-bg);
+  border-bottom-color: var(--zc-bg);
+  z-index: 1;
+}
+
+.tab.disabled {
+  color: var(--zc-dimmer);
+  cursor: default;
+}
+
+/* Theme toggle */
+.themeToggle {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 200;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--zc-border);
+  background: var(--zc-toggle-bg);
+  color: var(--zc-toggle-fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-family: inherit;
+  box-shadow: var(--zc-shadow-sm);
+  transition: background 0.2s, border-color 0.2s;
+}

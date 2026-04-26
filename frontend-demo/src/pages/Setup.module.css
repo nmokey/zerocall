@@ -1,0 +1,282 @@
+.container {
+  padding: 48px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Header */
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--zc-text);
+}
+
+.subtitle {
+  color: var(--zc-muted);
+  font-size: 0.875rem;
+  margin-top: 5px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.syncLabel {
+  font-size: 0.78rem;
+  color: var(--zc-dimmer);
+}
+
+.syncSuccess {
+  color: var(--zc-success);
+  font-weight: 500;
+}
+
+.syncFailed {
+  color: var(--zc-error);
+  font-weight: 500;
+}
+
+.syncButton {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid var(--zc-border);
+  border-radius: 6px;
+  background: var(--zc-primary);
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.syncButton:disabled {
+  background: var(--zc-input-bg);
+  color: var(--zc-text);
+  cursor: default;
+}
+
+/* Banner */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.bannerSuccess {
+  background: var(--zc-success-bg);
+  border: 1px solid var(--zc-success-border);
+  color: var(--zc-success);
+}
+
+.bannerError {
+  background: var(--zc-error-bg);
+  border: 1px solid var(--zc-error-border);
+  color: var(--zc-error);
+}
+
+/* Table */
+.table {
+  border: 1.5px solid var(--zc-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+
+.tableHead {
+  display: grid;
+  grid-template-columns: 196px 168px 1fr;
+  padding: 10px 24px;
+  background: var(--zc-card-head);
+  border-bottom: 1.5px solid var(--zc-border);
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 196px 168px 1fr;
+  padding: 20px 24px;
+  align-items: start;
+  background: var(--zc-card);
+  border-bottom: 1px solid var(--zc-table-row-border);
+}
+
+.tableRowLast {
+  border-bottom: none;
+}
+
+.sectionLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--zc-dimmer);
+}
+
+.integrationName {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--zc-text);
+}
+
+.integrationDesc {
+  font-size: 0.8rem;
+  color: var(--zc-muted);
+  margin-top: 3px;
+}
+
+.credRow {
+  display: flex;
+  gap: 12px;
+}
+
+/* Status dot */
+.statusDot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+}
+
+.statusDot.ok {
+  color: var(--zc-success);
+}
+
+.statusDot.warn {
+  color: var(--zc-warn);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.statusDot.ok .dot {
+  background: var(--zc-success);
+}
+
+.statusDot.warn .dot {
+  background: var(--zc-warn);
+}
+
+/* Auth link */
+.authLink {
+  display: block;
+  margin-top: 5px;
+  padding: 0;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--zc-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Cred field */
+.credField {
+  flex: 1;
+  min-width: 0;
+}
+
+.credLabel {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--zc-label);
+  margin-bottom: 5px;
+}
+
+.credInputWrap {
+  position: relative;
+}
+
+.credInput {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--zc-border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-family: var(--zc-font-mono);
+  background: var(--zc-input-bg);
+  color: var(--zc-text);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.credInput:focus {
+  border-color: var(--zc-primary);
+}
+
+.credInput.locked {
+  background: var(--zc-locked-bg);
+  color: var(--zc-locked-text);
+  cursor: pointer;
+}
+
+.credEditIcon {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.78rem;
+  color: var(--zc-dimmer);
+  pointer-events: none;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border: 1.5px solid var(--zc-border);
+  border-radius: 8px;
+  background: var(--zc-card-head);
+}
+
+.footerInfo {
+  font-size: 0.82rem;
+  color: var(--zc-muted);
+}
+
+.saveButton {
+  padding: 9px 24px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 7px;
+  background: var(--zc-primary);
+  color: white;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.saveButton:disabled {
+  cursor: default;
+  opacity: 0.7;
+}

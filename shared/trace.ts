@@ -51,7 +51,7 @@ function printRun(label: string, color: string, run: AgentRun) {
   console.log(`\n  ${DIM}Total latency: ${YELLOW}${run.totalLatencyMs}ms${RESET}  ${DIM}Tokens: ${CYAN}${run.inputTokens + run.outputTokens}${RESET}  ${DIM}Tool calls: ${color}${run.toolCalls.length}${RESET}${llmTurnsStr}`);
 }
 
-/** Agent function signatures that demo/ and live/ each provide. */
+/** Agent function signatures for trace comparison. */
 export interface TraceAgents {
   runWithoutZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
   runWithZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;

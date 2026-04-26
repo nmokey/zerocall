@@ -107,7 +107,7 @@ Click **Sync now** on the Setup page, then navigate to **Trace** and run any pro
 
 ```bash
 npm run dev        # server in watch/reload mode (port 3000)
-npm run dev:web    # Vite dev server with HMR at localhost:5173 (proxies /api/* to port 3000)
+npm run dev:frontend-demo    # Vite dev server with HMR at localhost:5173 (proxies /api/* to port 3000)
 ```
 
 Run both simultaneously and open `http://localhost:5173`.
