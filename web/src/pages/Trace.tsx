@@ -152,7 +152,7 @@ function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgre
             <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{i + 1}.</span>
             <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, color: T.text }}>{tc.tool}</span>
             {truncated && <span style={{ color: T.dimmer, fontFamily: "'SF Mono', 'Fira Code', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{truncated}</span>}
-            <span style={{ color: '#c87830', fontWeight: 500, flexShrink: 0 }}>{tc.latencyMs}ms</span>
+            <span style={{ color: T.warning, fontWeight: 500, flexShrink: 0 }}>{tc.latencyMs}ms</span>
           </div>
         );
       })}

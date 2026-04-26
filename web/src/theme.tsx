@@ -22,6 +22,7 @@ export interface ThemeTokens {
   successBorder: string;
   errorBg: string;
   errorBorder: string;
+  warning: string;
   withoutAccent: string;
   withAccent: string;
 }
@@ -48,6 +49,7 @@ export const LIGHT: ThemeTokens = {
   successBorder: '#9dceab',
   errorBg: '#fdf0f0',
   errorBorder: '#efb8b8',
+  warning: '#c87830',
   withoutAccent: '#b53030',
   withAccent: '#2e7d4f',
 };
@@ -72,6 +74,7 @@ export const DARK: ThemeTokens = {
   successBorder: '#3a6b48',
   errorBg: '#2e1c1c',
   errorBorder: '#6b3a3a',
+  warning: '#e0944a',
   withoutAccent: '#d44444',
   withAccent: '#4caa70',
 };

@@ -77,8 +77,8 @@ function CredField({ label, name, value, placeholder, type = 'text', isSet = fal
 function StatusDot({ ok, label }: { ok: boolean; label: string }) {
   const { T } = useTheme();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: ok ? T.success : '#c87830' }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? T.success : '#c87830', flexShrink: 0, display: 'inline-block' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: ok ? T.success : T.warning }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? T.success : T.warning, flexShrink: 0, display: 'inline-block' }} />
       {label}
     </div>
   );
