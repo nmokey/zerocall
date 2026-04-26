@@ -27,6 +27,8 @@ function Tab({ label, active, disabled, onClick, T }: { label: string; active: b
         zIndex: active ? 1 : 0,
         transition: 'color 0.15s',
         whiteSpace: 'nowrap',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
       }}
     >
       {label}
@@ -108,7 +110,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", transition: 'background 0.2s' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, fontFamily: "'Fira Code', monospace", transition: 'background 0.2s' }}>
       <header style={{
         background: T.navBg,
         borderBottom: `1.5px solid ${T.navBorder}`,
@@ -125,7 +127,7 @@ export default function App() {
           gap: 8,
         }}>
           <Tab label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} T={T} />
-          <Tab label="Trace" active={page === 'trace'} disabled={!isReady} onClick={() => isReady && setPage('trace')} T={T} />
+          <Tab label="DEMO" active={page === 'trace'} disabled={!isReady} onClick={() => isReady && setPage('trace')} T={T} />
           <span style={{ flex: 1 }} />
           <span style={{
             fontWeight: 700,

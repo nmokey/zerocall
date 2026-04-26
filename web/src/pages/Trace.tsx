@@ -11,35 +11,7 @@ const KEYFRAMES = `
 @keyframes oc-spin      { to { transform: rotate(360deg); } }
 @keyframes oc-fadein    { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes oc-slidein   { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes oc-toastin   { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes oc-toastout  { from { opacity: 1; } to { opacity: 0; } }
 `;
-
-// ─── Sync toast ───────────────────────────────────────────────────────────────
-
-function SyncToast({ lastSync, T }: { lastSync: string; T: Theme }) {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(false), 4000);
-    return () => clearTimeout(t);
-  }, [lastSync]);
-
-  if (!visible) return null;
-  return (
-    <div style={{
-      position: 'fixed', top: 16, right: 24, zIndex: 100,
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '9px 16px', borderRadius: 8,
-      background: T.toastBg, border: `1.5px solid ${T.border}`,
-      boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-      fontSize: '0.8rem', color: T.text,
-      animation: 'oc-toastin 0.25s ease',
-    }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.success, flexShrink: 0, display: 'inline-block' }} />
-      Synced · {new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-    </div>
-  );
-}
 
 function Spinner({ size = 16, T }: { size?: number; T: Theme }) {
   return (
@@ -337,6 +309,7 @@ function QueryClassificationBar({
                   color: hasSuggestion ? T.withoutAccent : enabled ? CATEGORY_COLORS[sec] : T.dimmer,
                   fontSize: '0.72rem', fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s ease',
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
                 }}
               >
                 <span style={{
@@ -422,6 +395,7 @@ function QueryClassificationBar({
                   padding: '3px 12px', fontSize: '0.72rem', fontWeight: 600,
                   border: `1px solid ${T.error}`, borderRadius: 5,
                   background: 'transparent', color: T.error, cursor: 'pointer', flexShrink: 0,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
                 }}
               >
                 Disable
@@ -515,6 +489,7 @@ export default function Trace({ T }: { T: Theme }) {
   const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [lastSyncSuccess, setLastSyncSuccess] = useState<boolean | null>(null);
   const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS);
   const lastSyncRef = useRef<string | null>(null);
@@ -526,6 +501,7 @@ export default function Trace({ T }: { T: Theme }) {
         if (s.lastSync && s.lastSync !== lastSyncRef.current) {
           lastSyncRef.current = s.lastSync;
           setLastSync(s.lastSync);
+          setLastSyncSuccess(s.lastSyncSuccess);
         }
       } catch { /* ignore polling errors silently */ }
     }
@@ -622,17 +598,39 @@ export default function Trace({ T }: { T: Theme }) {
 
   const bothDone = !!(stream?.without && stream?.with);
 
+  const syncLabel = lastSync ? (() => {
+    const now = new Date();
+    const syncTime = new Date(lastSync);
+    const diffMs = now.getTime() - syncTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'last sync · just now · ';
+    if (diffMins < 60) return `last sync · ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago · `;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `last sync · ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago · `;
+    const diffDays = Math.floor(diffHours / 24);
+    return `last sync · ${diffDays} day${diffDays !== 1 ? 's' : ''} ago · `;
+  })() : null;
+
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
       <style>{KEYFRAMES}</style>
-      {lastSync && <SyncToast key={lastSync} lastSync={lastSync} T={T} />}
 
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Live Trace</h1>
-        <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>
-          Run both agents against your live data and see the side-by-side comparison.
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Live Trace</h1>
+          <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>
+            Run both agents against your live data and see the side-by-side comparison.
+          </p>
+        </div>
+        {syncLabel && (
+          <span style={{ fontSize: '0.78rem', color: T.dimmer }}>
+            {syncLabel}
+            <span style={{ color: lastSyncSuccess ? T.success : T.error, fontWeight: 500 }}>
+              {lastSyncSuccess ? '✓ success' : '✗ failed'}
+            </span>
+          </span>
+        )}
       </div>
 
       {/* Prompt input */}
@@ -651,7 +649,7 @@ export default function Trace({ T }: { T: Theme }) {
           <button
             type="submit"
             disabled={loading || !prompt.trim()}
-            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}
+            style={{ padding: '10px 24px', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: 8, background: T.primary, color: 'white', cursor: loading || !prompt.trim() ? 'default' : 'pointer', opacity: loading || !prompt.trim() ? 0.6 : 1, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
             {loading ? <><Spinner size={14} T={T} />Running…</> : 'Run Trace'}
           </button>
