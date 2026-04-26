@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
+import type { AgentRun, AdaptiveStats, FetchProfile, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
 import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import styles from './Trace.module.css';
 
@@ -217,6 +217,22 @@ function AgentPanel({ label, agent, run, liveToolCalls = [], waiting = false }: 
   );
 }
 
+function fetchDepth(section: 'calendar' | 'email' | 'tasks', profile: FetchProfile): number {
+  if (section === 'calendar') return (profile.calendar.deadlineDays - 3) / (14 - 3);
+  if (section === 'email') {
+    const d = (profile.email.newerThanDays - 1) / (7 - 1);
+    const r = (profile.email.maxResults - 10) / (100 - 10);
+    return (d + r) / 2;
+  }
+  return (profile.tasks.pageSize - 50) / (200 - 50);
+}
+
+function fetchDepthLabel(section: 'calendar' | 'email' | 'tasks', profile: FetchProfile): string {
+  if (section === 'calendar') return `${profile.calendar.deadlineDays}d deadline window`;
+  if (section === 'email')    return `${profile.email.newerThanDays}d lookback \u00b7 ${profile.email.maxResults} threads`;
+  return `${profile.tasks.pageSize} pages`;
+}
+
 function QueryClassificationBar({
   stats,
   onToggle,
@@ -224,34 +240,20 @@ function QueryClassificationBar({
   stats: AdaptiveStats;
   onToggle: (section: string, enabled: boolean) => void;
 }) {
-  const { categoryDistribution, queryCount, currentConfig, sectionRelevance, suggestions } = stats;
-
-  const rows = (['calendar', 'email', 'tasks', 'general'] as const)
-    .map(cat => ({ cat, count: categoryDistribution[cat] ?? 0 }))
-    .filter(r => r.count > 0);
-
-  const suggestionSections = new Set(suggestions.map(s => s.section));
+  const { currentConfig, fetchProfile } = stats;
 
   return (
     <div className={styles.adaptiveCard}>
       <div className={styles.adaptiveHeader}>
-        <div className={styles.adaptiveHeaderLeft}>
-          <span className={styles.adaptiveTitle}>Adaptive context</span>
-          <span className={styles.adaptiveCount}>
-            {queryCount} {queryCount === 1 ? 'query' : 'queries'} classified
-          </span>
-        </div>
+        <span className={styles.adaptiveTitle}>Fetch depth \u00b7 adaptive</span>
 
         <div className={styles.sectionToggles}>
           {SECTION_KEYS.map(sec => {
             const enabled = currentConfig[sec] !== false;
-            const hasSuggestion = suggestionSections.has(sec);
-            const relevancePct = Math.round((sectionRelevance[sec] ?? 0) * 100);
-            const tokenSavings = suggestions.find(s => s.section === sec)?.projectedTokenSavings ?? 0;
 
             const toggleCls = [
               styles.sectionToggle,
-              hasSuggestion ? styles.suggestion : enabled ? styles.enabled : styles.disabled,
+              enabled ? styles.enabled : styles.disabled,
             ].join(' ');
 
             return (
@@ -259,76 +261,41 @@ function QueryClassificationBar({
                 key={sec}
                 onClick={() => onToggle(sec, !enabled)}
                 data-section={sec}
-                title={
-                  hasSuggestion
-                    ? `Only ${relevancePct}% of queries need this \u2014 click to disable and save ~${tokenSavings} tokens/req`
-                    : enabled
-                      ? `${CATEGORY_LABELS[sec]} context injecting \u2014 click to disable`
-                      : `${CATEGORY_LABELS[sec]} context disabled \u2014 click to enable`
-                }
+                title={enabled ? `${CATEGORY_LABELS[sec]} context injecting \u2014 click to disable` : `${CATEGORY_LABELS[sec]} context disabled \u2014 click to enable`}
                 className={toggleCls}
               >
                 <span className={styles.sectionDot} />
                 {CATEGORY_LABELS[sec]}
                 {!enabled && <span className={styles.offLabel}> off</span>}
-                {hasSuggestion && (
-                  <span className={styles.savingsLabel}>{'\u2193'}{tokenSavings}t</span>
-                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <div className={styles.classificationEmpty}>
-          No queries classified yet &mdash; run a trace to see your query breakdown.
-        </div>
-      ) : (
-        <div className={styles.classificationRows}>
-          {rows.map(({ cat, count }) => {
-            const pct = queryCount > 0 ? Math.round((count / queryCount) * 100) : 0;
-            const isDisabled = cat !== 'general' && currentConfig[cat as 'calendar' | 'email' | 'tasks'] === false;
-            return (
-              <div key={cat} className={styles.classificationRow}>
-                <span className={`${styles.classificationLabel} ${isDisabled ? styles.lineThrough : ''}`}>
-                  {CATEGORY_LABELS[cat]}
-                </span>
-                <div className={styles.classificationBarOuter}>
-                  <div
-                    className={`${styles.classificationBarInner} ${isDisabled ? styles.barDisabled : ''}`}
-                    data-cat={cat}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span
-                  className={`${styles.classificationPct} ${isDisabled ? styles.pctDisabled : ''}`}
-                  data-cat={isDisabled ? undefined : cat}
-                >
-                  {pct}%
-                </span>
-                <span className={styles.classificationCount}>{count}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {suggestions.length > 0 && (
-        <div className={styles.suggestionCallout}>
-          <span className={styles.suggestionTitle}>Adaptive suggestion</span>
-          {suggestions.map(s => (
-            <div key={s.section} className={styles.suggestionItem}>
-              <span>
-                <b>{CATEGORY_LABELS[s.section]}</b> context is only relevant for {Math.round(s.relevanceScore * 100)}% of your queries &mdash; disable to save ~{s.projectedTokenSavings} tokens/request
+      <div className={styles.fetchDepthRows}>
+        {SECTION_KEYS.map(sec => {
+          const depth = fetchDepth(sec, fetchProfile) * 100;
+          const isDisabled = currentConfig[sec] === false;
+          return (
+            <div key={sec} className={styles.fetchDepthRow}>
+              <span className={`${styles.fetchDepthLabel} ${isDisabled ? styles.lineThrough : ''}`}>
+                {CATEGORY_LABELS[sec]}
               </span>
-              <button onClick={() => onToggle(s.section, false)} className={styles.disableButton}>
-                Disable
-              </button>
+              <div className={styles.fetchDepthBarOuter}>
+                <div
+                  className={`${styles.fetchDepthBarInner} ${isDisabled ? styles.barDisabled : ''}`}
+                  data-cat={sec}
+                  style={{ width: `${depth}%` }}
+                />
+              </div>
+              <span className={`${styles.fetchDepthInfo} ${isDisabled ? styles.fetchDepthInfoDisabled : ''}`}>
+                {fetchDepthLabel(sec, fetchProfile)}
+              </span>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -436,11 +403,7 @@ export default function Trace() {
   }, []);
 
   async function handleToggle(section: string, enabled: boolean) {
-    setAdaptiveStats(prev => prev ? {
-      ...prev,
-      currentConfig: { ...prev.currentConfig, [section]: enabled },
-      suggestions: prev.suggestions.filter(s => s.section !== section),
-    } : prev);
+    setAdaptiveStats(prev => prev ? { ...prev, currentConfig: { ...prev.currentConfig, [section]: enabled } } : prev);
     try {
       await applyAdaptiveSection(section, enabled);
       await refreshAdaptiveStats();
