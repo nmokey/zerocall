@@ -73,8 +73,6 @@
   color: white;
   cursor: pointer;
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -507,8 +505,6 @@
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .sectionToggle[data-section="calendar"] { --sec-color: var(--zc-cat-calendar); }

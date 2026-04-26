@@ -68,8 +68,6 @@
   background: var(--zc-primary);
   color: white;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
@@ -89,9 +87,9 @@
 
 /* Tab button */
 .tab {
-  padding: 10px 32px;
-  font-size: 0.95rem;
-  font-weight: 400;
+  padding: 7px 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
   font-family: inherit;
   color: var(--zc-muted);
   background: var(--zc-card-head);
@@ -104,8 +102,6 @@
   z-index: 0;
   transition: color 0.15s;
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .tab.active {

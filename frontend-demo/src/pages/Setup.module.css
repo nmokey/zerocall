@@ -145,8 +145,6 @@
   cursor: pointer;
   text-decoration: underline;
   text-align: left;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 /* Cred field */
@@ -226,8 +224,6 @@
   background: var(--zc-primary);
   color: white;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .saveButton:disabled {
