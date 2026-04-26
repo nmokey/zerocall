@@ -43,7 +43,7 @@ Pre-deciding what data to inject means injecting things users don't need. OneCal
 
 OneCall has four layers:
 
-**Layer 1: Background sync** — A node-cron loop that polls Gmail, Google Calendar, and Notion every 15 minutes, distills raw API responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database.
+**Layer 1: Lazy-cached sync** — `ensureFreshSnapshot()` checks if the cached snapshot is older than 15 minutes. If stale (or missing), it triggers a parallel fetch from Gmail, Google Calendar, and Notion, distills responses into a clean `WorkStateSnapshot`, and persists it to SQLite. There is no background polling loop — syncing is on-demand.
 
 **Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
 
@@ -66,16 +66,17 @@ onecall/
 │   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
 │   ├── package.json
 │   └── tsconfig.json
-├── server/                    # Background sync server + Express API
+├── server/                    # Lazy-cached sync + Express API
 │   ├── src/
-│   │   ├── main.ts            # Entrypoint: initSchema + startScheduler + HTTP server
+│   │   ├── index.ts           # Public API surface for @onecall/server (re-exports)
+│   │   ├── main.ts            # Entrypoint: initSchema + HTTP server
 │   │   ├── env.ts             # Loads .env relative to server root
 │   │   ├── api/
 │   │   │   ├── server.ts      # Express HTTP server — all /api/* routes + SPA fallback
 │   │   │   ├── config.ts      # Credential validation + .env writing
 │   │   │   └── setup.ts       # (legacy) server-rendered HTML setup page
 │   │   ├── sync/
-│   │   │   ├── scheduler.ts   # node-cron polling loop + ensureFreshSnapshot()
+│   │   │   ├── scheduler.ts   # ensureFreshSnapshot() — lazy cache, syncs on demand
 │   │   │   └── syncAll.ts     # Orchestrates a full sync across all providers
 │   │   ├── providers/
 │   │   │   ├── types.ts       # TaskProvider interface
@@ -119,7 +120,8 @@ onecall/
 │   └── benchmark.ts           # Sequential 20-prompt run → metrics table + summary
 ├── live/                      # Live-data evaluation scripts
 │   ├── agents/
-│   │   └── with.ts            # Re-exports runWithOneCall from server/src/trace/agents
+│   │   ├── without.ts         # Real-API tool agent (Google + Notion live calls)
+│   │   └── with.ts            # Re-exports runWithOneCall from @onecall/server
 │   ├── trace.ts               # Thin wrapper → shared/trace.ts
 │   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
 ├── shared/                    # Logic shared between demo/ and live/
@@ -357,17 +359,11 @@ CREATE TABLE IF NOT EXISTS adaptive_config (
 
 ---
 
-### Background Sync
+### Sync
 
 `syncAll()` calls each provider in parallel (`Promise.allSettled`), merges results into a `WorkStateSnapshot`, and writes to SQLite. Errors from individual providers are caught and written to `meta.errors` — a Gmail failure should not block calendar data from being saved.
 
-```typescript
-// scheduler.ts
-cron.schedule('*/15 * * * *', async () => { await syncAll(); });
-syncAll(); // run once immediately on startup
-```
-
-`ensureFreshSnapshot()` implements lazy caching: returns the in-memory snapshot if it's under 15 minutes old, otherwise triggers a fresh sync. This is used by live agents so they don't wait for a sync that hasn't run yet.
+`ensureFreshSnapshot()` in `scheduler.ts` implements lazy caching: returns the cached snapshot if it's under 15 minutes old, otherwise triggers a fresh `syncAll()` first. There is no background polling loop — syncing is purely on-demand when a snapshot is requested.
 
 ---
 
@@ -421,14 +417,18 @@ The project uses **npm workspaces** with three packages (`harness`, `server`, `w
   "workspaces": ["harness", "server", "web"],
   "scripts": {
     "build": "npm run build -w harness && npm run build -w server && npm run build -w web",
+    "build:harness": "npm run build -w harness",
+    "build:server": "npm run build -w server",
+    "build:web": "npm run build -w web",
+    "dev:web": "npm run dev -w web",
     "start": "npm start -w server",
     "dev": "npm run dev -w server",
-    "dev:web": "npm run dev -w web",
     "demo:trace": "npm run build:harness && tsx demo/trace.ts",
     "demo:benchmark": "npm run build:harness && tsx demo/benchmark.ts",
     "demo:adaptive": "npm run build:harness && npm run build:server && tsx demo/adaptive-benchmark.ts",
-    "live:trace": "npm run build:harness && tsx live/trace.ts",
-    "live:benchmark": "npm run build:harness && tsx live/benchmark.ts"
+    "live:trace": "npm run build:harness && npm run build:server && tsx live/trace.ts",
+    "live:benchmark": "npm run build:harness && npm run build:server && tsx live/benchmark.ts",
+    "auth:google": "tsx scripts/google-auth.ts"
   }
 }
 ```

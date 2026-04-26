@@ -110,7 +110,7 @@ SUMMARY (20 prompts)
 
 ## Prompts
 
-Shared with the demo — the 20 benchmark prompts live in [`demo/prompts.ts`](../demo/prompts.ts). They cover the full range of productivity queries:
+Shared with the demo — the 20 benchmark prompts live in [`shared/prompts.ts`](../shared/prompts.ts). They cover the full range of productivity queries:
 - Priority / focus queries ("What should I focus on?")
 - Calendar queries ("Am I free at 3pm?")
 - Email queries ("Did Sarah reply?")
