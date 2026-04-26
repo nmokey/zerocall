@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { AgentRun, AdaptiveStats, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
 import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import type { Theme } from '../theme';
@@ -223,7 +224,20 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false, T
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 10 }}>Response</div>
         <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65 }}>
-          <ReactMarkdown>{run!.finalResponse}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              table: ({ children }) => (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.82rem' }}>{children}</table>
+              ),
+              th: ({ children }) => (
+                <th style={{ border: `1px solid ${T.border}`, padding: '6px 10px', background: T.cardHead, fontWeight: 600, textAlign: 'left', color: T.text }}>{children}</th>
+              ),
+              td: ({ children }) => (
+                <td style={{ border: `1px solid ${T.border}`, padding: '6px 10px', color: T.text }}>{children}</td>
+              ),
+            }}
+          >{run!.finalResponse}</ReactMarkdown>
         </div>
       </div>
 
