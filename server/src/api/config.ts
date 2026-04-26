@@ -21,10 +21,49 @@ export function getIntegrationPreferences(): IntegrationPreferences {
   };
 }
 
-export function getConfigStatus(): { present: string[]; missing: string[] } {
+function maskValue(value: string): string {
+  if (!value || value.length <= 8) return '••••••••';
+  const start = value.substring(0, 4);
+  const end = value.substring(value.length - 4);
+  return `${start}••••${end}`;
+}
+
+export function getConfigStatus(): { present: string[]; missing: string[]; values: Record<string, string> } {
   const present = REQUIRED_VARS.filter(key => !!process.env[key]);
   const missing = REQUIRED_VARS.filter(key => !process.env[key]);
-  return { present, missing };
+  const values: Record<string, string> = {};
+  for (const key of REQUIRED_VARS) {
+    if (process.env[key]) {
+      values[key] = maskValue(process.env[key]!);
+    }
+  }
+  // Also include ANTHROPIC_API_KEY if present
+  if (process.env.ANTHROPIC_API_KEY) {
+    present.push('ANTHROPIC_API_KEY');
+    values['ANTHROPIC_API_KEY'] = maskValue(process.env.ANTHROPIC_API_KEY);
+  }
+  return { present, missing, values };
+}
+
+/**
+ * Validates format of credentials that are present (non-empty).
+ * Does not enforce required fields — allows partial saves from the UI.
+ */
+export function validatePartialConfig(values: Record<string, string>): string[] {
+  const errors: string[] = [];
+  if (values.GOOGLE_CLIENT_ID && !values.GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')) {
+    errors.push('GOOGLE_CLIENT_ID should end with .apps.googleusercontent.com');
+  }
+  if (values.NOTION_TOKEN && !values.NOTION_TOKEN.startsWith('secret_') && !values.NOTION_TOKEN.startsWith('ntn_')) {
+    errors.push('NOTION_TOKEN should start with secret_ or ntn_');
+  }
+  if (values.NOTION_DATABASE_ID) {
+    const dbId = values.NOTION_DATABASE_ID.replace(/-/g, '');
+    if (!/^[0-9a-f]{32}$/i.test(dbId)) {
+      errors.push('NOTION_DATABASE_ID should be a 32-character hex string');
+    }
+  }
+  return errors;
 }
 
 export function validateConfig(values: Record<string, string>, prefs?: IntegrationPreferences): string[] {
