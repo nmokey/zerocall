@@ -4,6 +4,7 @@ import Setup from './pages/Setup';
 import Trace from './pages/Trace';
 import styles from './App.module.css';
 import logoSrc from './assets/zerocall_logo.png';
+import darkLogoSrc from './assets/dark_logo.png';
 
 type Page = 'setup' | 'trace';
 type AppState = 'loading' | 'setup' | 'ready';
@@ -138,7 +139,7 @@ export default function App() {
             <button onClick={handleSync} disabled={syncing} className={styles.syncButton}>
               {syncing ? 'Syncing\u2026' : 'Sync'}
             </button>
-            <img src={logoSrc} alt="ZeroCall" className={styles.branding} />
+            <img src={dark ? darkLogoSrc : logoSrc} alt="ZeroCall" className={dark ? styles.brandingDark : styles.branding} />
           </div>
         </div>
       </header>

@@ -85,6 +85,13 @@
   user-select: none;
 }
 
+.brandingDark {
+  height: 32px;
+  width: auto;
+  display: block;
+  user-select: none;
+}
+
 /* Tab button */
 .tab {
   padding: 7px 20px;
