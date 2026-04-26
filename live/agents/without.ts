@@ -1,2 +1,2 @@
-export { runWithoutOneCall } from '../../server/src/trace/agents.js';
-export type { AgentRun, ToolCallRecord } from '../../server/src/trace/agents.js';
+export { runWithoutOneCall } from '@onecall/server';
+export type { AgentRun, ToolCallRecord } from '@onecall/server';
