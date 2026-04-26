@@ -94,6 +94,7 @@ async function runAgentLoop(
 
 const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
+/** Builds the raw tool definitions for the without-OneCall agent, with today's date computed fresh per call. */
 function buildRawTools(): Tool[] {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
   return [
