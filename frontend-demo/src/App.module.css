@@ -80,10 +80,10 @@
 }
 
 .branding {
-  font-weight: 700;
-  font-size: 1.4rem;
-  letter-spacing: -0.03em;
-  color: var(--zc-nav-text);
+  height: 32px;
+  width: auto;
+  display: block;
+  mix-blend-mode: multiply;
   user-select: none;
 }
 
