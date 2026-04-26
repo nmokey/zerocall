@@ -1,3 +1,17 @@
+@keyframes oc-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes oc-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes oc-slidein {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 .container {
   padding: 48px 24px;
   max-width: 1100px;
@@ -6,9 +20,6 @@
 
 /* Page header */
 .pageHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   margin-bottom: 32px;
 }
 
@@ -23,21 +34,6 @@
   color: var(--zc-muted);
   font-size: 0.875rem;
   margin-top: 5px;
-}
-
-.syncLabel {
-  font-size: 0.78rem;
-  color: var(--zc-dimmer);
-}
-
-.syncSuccess {
-  color: var(--zc-success);
-  font-weight: 500;
-}
-
-.syncFailed {
-  color: var(--zc-error);
-  font-weight: 500;
 }
 
 /* Prompt form */

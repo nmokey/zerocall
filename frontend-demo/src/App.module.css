@@ -28,7 +28,7 @@
 .tabStrip {
   display: flex;
   align-items: flex-end;
-  padding: 20px 28px 0;
+  padding: 12px 28px 0;
   gap: 8px;
 }
 
@@ -36,12 +36,54 @@
   flex: 1;
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 10px;
+}
+
+.syncAge {
+  font-size: 0.75rem;
+  color: var(--zc-dimmer);
+}
+
+.syncSuccess {
+  color: var(--zc-success);
+  font-weight: 500;
+}
+
+.syncFailed {
+  color: var(--zc-error);
+  font-weight: 500;
+}
+
+.syncButton {
+  padding: 4px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid var(--zc-border);
+  border-radius: 6px;
+  background: var(--zc-primary);
+  color: white;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.syncButton:disabled {
+  background: var(--zc-input-bg);
+  color: var(--zc-text);
+  cursor: default;
+}
+
 .branding {
   font-weight: 700;
   font-size: 1.4rem;
   letter-spacing: -0.03em;
   color: var(--zc-nav-text);
-  padding-bottom: 10px;
   user-select: none;
 }
 

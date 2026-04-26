@@ -1,11 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { getStatus } from './api';
+import React, { useEffect, useRef, useState } from 'react';
+import { getStatus, triggerSync } from './api';
 import Setup from './pages/Setup';
 import Trace from './pages/Trace';
 import styles from './App.module.css';
 
 type Page = 'setup' | 'trace';
 type AppState = 'loading' | 'setup' | 'ready';
+
+function formatSyncAge(lastSync: string): string {
+  const diffMs = Date.now() - new Date(lastSync).getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'last sync \u00b7 just now';
+  if (diffMins < 60) return `last sync \u00b7 ${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `last sync \u00b7 ${diffHours}h ago`;
+  return `last sync \u00b7 ${Math.floor(diffHours / 24)}d ago`;
+}
 
 function Tab({ label, active, disabled, onClick }: { label: string; active: boolean; disabled?: boolean; onClick: () => void }) {
   const cls = [styles.tab, active ? styles.active : '', disabled ? styles.disabled : ''].filter(Boolean).join(' ');
@@ -35,6 +45,10 @@ export default function App() {
     try { return localStorage.getItem('zc-theme') === 'dark'; }
     catch { return false; }
   });
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [lastSyncSuccess, setLastSyncSuccess] = useState<boolean | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const lastSyncRef = useRef<string | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem('zc-theme', dark ? 'dark' : 'light'); }
@@ -47,17 +61,49 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    getStatus()
-      .then(s => {
-        if (s.configured && s.authenticated) {
-          setAppState('ready');
-          setPage('trace');
-        } else {
-          setAppState('setup');
+    async function checkStatus() {
+      try {
+        const s = await getStatus();
+        if (s.lastSync && s.lastSync !== lastSyncRef.current) {
+          lastSyncRef.current = s.lastSync;
+          setLastSync(s.lastSync);
+          setLastSyncSuccess(s.lastSyncSuccess);
         }
-      })
-      .catch(() => setAppState('setup'));
+        return s;
+      } catch { return null; }
+    }
+
+    checkStatus().then(s => {
+      if (!s) { setAppState('setup'); return; }
+      if (s.configured && s.authenticated) {
+        setAppState('ready');
+        setPage('trace');
+      } else {
+        setAppState('setup');
+      }
+    });
+
+    const id = setInterval(checkStatus, 30_000);
+    return () => clearInterval(id);
   }, []);
+
+  async function handleSync() {
+    const previousLastSync = lastSync;
+    setSyncing(true);
+    await triggerSync().catch(() => null);
+    const poll = setInterval(async () => {
+      try {
+        const s = await getStatus();
+        if (s.lastSync !== null && s.lastSync !== previousLastSync) {
+          clearInterval(poll);
+          lastSyncRef.current = s.lastSync;
+          setLastSync(s.lastSync);
+          setLastSyncSuccess(s.lastSyncSuccess);
+          setSyncing(false);
+        }
+      } catch { clearInterval(poll); setSyncing(false); }
+    }, 1000);
+  }
 
   if (appState === 'loading') {
     return <div className={styles.loading}>Loading&hellip;</div>;
@@ -77,7 +123,22 @@ export default function App() {
           <Tab label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} />
           <Tab label="DEMO" active={page === 'trace'} disabled={!isReady} onClick={() => isReady && setPage('trace')} />
           <span className={styles.spacer} />
-          <span className={styles.branding}>ZeroCall</span>
+          <div className={styles.headerRight}>
+            {lastSync ? (
+              <span className={styles.syncAge}>
+                {formatSyncAge(lastSync)} &middot;{' '}
+                <span className={lastSyncSuccess ? styles.syncSuccess : styles.syncFailed}>
+                  {lastSyncSuccess ? '\u2713 success' : '\u2717 failed'}
+                </span>
+              </span>
+            ) : (
+              <span className={styles.syncAge}>No sync yet</span>
+            )}
+            <button onClick={handleSync} disabled={syncing} className={styles.syncButton}>
+              {syncing ? 'Syncing\u2026' : 'Sync'}
+            </button>
+            <span className={styles.branding}>ZeroCall</span>
+          </div>
         </div>
       </header>
 

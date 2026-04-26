@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getConfig, getGoogleAuthUrl, getStatus, postConfig, triggerSync, type ApiConfig, type ApiStatus } from '../api';
+import { getConfig, getGoogleAuthUrl, getStatus, postConfig, type ApiConfig, type ApiStatus } from '../api';
 import styles from './Setup.module.css';
 
 interface Props {
@@ -77,7 +77,6 @@ export default function Setup({ onDone }: Props) {
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -133,26 +132,6 @@ export default function Setup({ onDone }: Props) {
     }
   }
 
-  async function handleSync() {
-    const previousLastSync = status?.lastSync;
-    setSyncing(true);
-    await triggerSync().catch(() => null);
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const newStatus = await getStatus();
-        if (newStatus.lastSync !== null && newStatus.lastSync !== previousLastSync) {
-          clearInterval(pollInterval);
-          setStatus(newStatus);
-          setSyncing(false);
-        }
-      } catch {
-        clearInterval(pollInterval);
-        setSyncing(false);
-      }
-    }, 1000);
-  }
-
   async function handleGoogleAuth() {
     try {
       const { url } = await getGoogleAuthUrl();
@@ -172,42 +151,12 @@ export default function Setup({ onDone }: Props) {
   const allFields = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NOTION_TOKEN', 'NOTION_DATABASE_ID', 'SLACK_USER_TOKEN', 'ANTHROPIC_API_KEY'];
   const pendingCount = allFields.filter(k => !present.includes(k)).length;
 
-  const lastSync = status?.lastSync;
-  const syncLabel = lastSync ? (() => {
-    const now = new Date();
-    const syncTime = new Date(lastSync);
-    const diffMs = now.getTime() - syncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'last sync \u00b7 just now \u00b7 ';
-    if (diffMins < 60) return `last sync \u00b7 ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago \u00b7 `;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `last sync \u00b7 ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago \u00b7 `;
-    const diffDays = Math.floor(diffHours / 24);
-    return `last sync \u00b7 ${diffDays} day${diffDays !== 1 ? 's' : ''} ago \u00b7 `;
-  })() : 'No sync yet';
-
   return (
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.title}>Setup</h1>
-          <p className={styles.subtitle}>Configure integrations and check connection status.</p>
-        </div>
-        <div className={styles.headerActions}>
-          {lastSync && (
-            <span className={styles.syncLabel}>
-              {syncLabel}
-              <span className={status?.lastSyncSuccess ? styles.syncSuccess : styles.syncFailed}>
-                {status?.lastSyncSuccess ? '\u2713 success' : '\u2717 failed'}
-              </span>
-            </span>
-          )}
-          {!lastSync && !syncing && <span className={styles.syncLabel}>No sync yet</span>}
-          <button onClick={handleSync} disabled={syncing} className={styles.syncButton}>
-            {syncing ? 'Syncing...' : 'Sync'}
-          </button>
-        </div>
+        <h1 className={styles.title}>Setup</h1>
+        <p className={styles.subtitle}>Configure integrations and check connection status.</p>
       </div>
 
       {/* Banner */}
