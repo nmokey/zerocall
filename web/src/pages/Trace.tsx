@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun, TraceResult } from '../api';
+import type { AgentRun, TraceResult, ToolCallRecord } from '../api';
 
 const T = {
   bg: '#ece8dc',
@@ -17,19 +17,17 @@ const T = {
   withAccent: '#2e7d4f',
 };
 
-// ─── Loading spinner ──────────────────────────────────────────────────────────
+// ─── Animations ───────────────────────────────────────────────────────────────
 
-const spinnerKeyframes = `
-@keyframes oc-spin { to { transform: rotate(360deg); } }
-@keyframes oc-fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+const KEYFRAMES = `
+@keyframes oc-spin    { to { transform: rotate(360deg); } }
+@keyframes oc-fadein  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes oc-slidein { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
 `;
 
 function Spinner({ size = 16 }: { size?: number }) {
   return (
-    <>
-      <style>{spinnerKeyframes}</style>
-      <span style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8, flexShrink: 0 }} />
-    </>
+    <span style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8, flexShrink: 0 }} />
   );
 }
 
@@ -44,7 +42,7 @@ function DeltaStrip({ deltas }: { deltas: TraceResult['deltas'] }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 12, marginBottom: 32, animation: 'oc-fadein 0.4s ease' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 12, marginBottom: 20, animation: 'oc-fadein 0.4s ease' }}>
       {items.map(({ label, value }) => (
         <div key={label} style={{ textAlign: 'center', padding: '20px 12px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 12, borderTop: `4px solid ${T.withAccent}` }}>
           <div style={{ fontSize: '3rem', fontWeight: 800, color: T.withAccent, letterSpacing: '-0.03em', lineHeight: 1 }}>
@@ -59,7 +57,55 @@ function DeltaStrip({ deltas }: { deltas: TraceResult['deltas'] }) {
   );
 }
 
-// ─── Agent run panel ──────────────────────────────────────────────────────────
+// ─── Bar graph ────────────────────────────────────────────────────────────────
+
+function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; with: AgentRun; deltas: TraceResult['deltas'] }) {
+  const withoutTokens = without.inputTokens + without.outputTokens;
+  const withTokens = with_.inputTokens + with_.outputTokens;
+
+  const metrics = [
+    { label: 'Tool calls', without: without.toolCalls.length, with: with_.toolCalls.length, pct: deltas.toolCallsPct },
+    { label: 'LLM turns',  without: without.llmTurns,         with: with_.llmTurns,         pct: deltas.llmTurnsPct },
+    { label: 'Latency',    without: without.totalLatencyMs,   with: with_.totalLatencyMs,   pct: deltas.latencyPct, unit: 'ms' },
+    { label: 'Tokens',     without: withoutTokens,            with: withTokens,             pct: deltas.tokensPct },
+  ];
+
+  function Bar({ value, max, accent, sublabel }: { value: number; max: number; accent: string; sublabel: string }) {
+    const height = max > 0 ? (value / max) * 100 : 0;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: 6 }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: accent }}>{value}</span>
+        <div style={{ width: '100%', height: 100, background: '#e8e4d8', borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${height}%`, background: accent, transition: 'height 0.4s ease' }} />
+        </div>
+        <span style={{ fontSize: '0.7rem', color: T.muted, textAlign: 'center' }}>{sublabel}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '20px 24px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 10, marginBottom: 28, animation: 'oc-fadein 0.4s ease' }}>
+      <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 16 }}>Metrics comparison</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length}, 1fr)`, gap: 16 }}>
+        {metrics.map(m => {
+          const max = Math.max(m.without, m.with);
+          return (
+            <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: T.text, textAlign: 'center' }}>{m.label}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Bar value={m.without} max={max} accent={T.withoutAccent} sublabel="Without" />
+                <Bar value={m.with}    max={max} accent={T.withAccent}    sublabel="With" />
+              </div>
+              <div style={{ fontSize: '0.75rem', color: T.success, fontWeight: 600, textAlign: 'center' }}>{m.pct}% fewer</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Agent panel ──────────────────────────────────────────────────────────────
 
 function MetricBadge({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
@@ -69,9 +115,52 @@ function MetricBadge({ label, value, color }: { label: string; value: string | n
   );
 }
 
-function AgentPanel({ label, run, accent }: { label: string; run: AgentRun | null; accent: string }) {
-  // Pending state — agent still running
-  if (!run) {
+/** Tool call list — used both for live (in-progress) and completed states. */
+function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgress: boolean }) {
+  if (calls.length === 0 && !inProgress) {
+    return <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>No tool calls</div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {calls.map((tc, i) => {
+        const argStr = Object.keys(tc.input).length > 0 ? JSON.stringify(tc.input) : '';
+        const truncated = argStr.length > 70 ? argStr.slice(0, 70) + '…' : argStr;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: '0.78rem', animation: 'oc-slidein 0.25s ease' }}>
+            <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{i + 1}.</span>
+            <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, color: T.text }}>{tc.tool}</span>
+            {truncated && <span style={{ color: T.dimmer, fontFamily: "'SF Mono', 'Fira Code', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{truncated}</span>}
+            <span style={{ color: '#c87830', fontWeight: 500, flexShrink: 0 }}>{tc.latencyMs}ms</span>
+          </div>
+        );
+      })}
+      {/* Spinner row for the next in-flight tool call */}
+      {inProgress && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: T.muted, animation: 'oc-slidein 0.25s ease' }}>
+          <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{calls.length + 1}.</span>
+          <Spinner size={12} />
+          <span>calling tool…</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface AgentPanelProps {
+  label: string;
+  accent: string;
+  run: AgentRun | null;
+  /** Live tool calls streamed before the run completes (without-agent only). */
+  liveToolCalls?: ToolCallRecord[];
+  /** True while the agent is still running but hasn't fired any tool calls yet. */
+  waiting?: boolean;
+}
+
+function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }: AgentPanelProps) {
+  const isLive = !run; // still running
+
+  // Pending — no data yet at all
+  if (isLive && liveToolCalls.length === 0 && !waiting) {
     return (
       <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
         <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
@@ -84,56 +173,52 @@ function AgentPanel({ label, run, accent }: { label: string; run: AgentRun | nul
     );
   }
 
-  const totalTokens = run.inputTokens + run.outputTokens;
+  // Live view — agent still running, show accumulated tool calls
+  if (isLive) {
+    return (
+      <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
+        <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent, flex: 1 }}>{label}</div>
+          <Spinner size={13} />
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <ToolCallList calls={liveToolCalls} inProgress={true} />
+        </div>
+      </div>
+    );
+  }
 
+  // Completed
+  const totalTokens = run!.inputTokens + run!.outputTokens;
   return (
     <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card, animation: 'oc-fadein 0.35s ease' }}>
-      {/* Panel header */}
       <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
-        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent, letterSpacing: '0.01em' }}>{label}</div>
+        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent }}>{label}</div>
       </div>
 
-      {/* Tool calls or injection notice */}
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
-        {run.snapshotInjected ? (
+        {run!.snapshotInjected ? (
           <div style={{ fontSize: '0.82rem', color: T.withAccent }}>
             <span style={{ fontWeight: 600 }}>✦ Work context auto-injected</span>
             <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>0 tool calls — harness injected the snapshot before first token</div>
           </div>
-        ) : run.toolCalls.length === 0 ? (
-          <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>No tool calls</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {run.toolCalls.map((tc, i) => {
-              const argStr = Object.keys(tc.input).length > 0 ? JSON.stringify(tc.input) : '';
-              const truncated = argStr.length > 70 ? argStr.slice(0, 70) + '…' : argStr;
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: '0.78rem' }}>
-                  <span style={{ color: accent, fontWeight: 600, flexShrink: 0 }}>{i + 1}.</span>
-                  <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, color: T.text }}>{tc.tool}</span>
-                  {truncated && <span style={{ color: T.dimmer, fontFamily: "'SF Mono', 'Fira Code', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{truncated}</span>}
-                  <span style={{ color: '#c87830', fontWeight: 500, flexShrink: 0 }}>{tc.latencyMs}ms</span>
-                </div>
-              );
-            })}
-          </div>
+          <ToolCallList calls={run!.toolCalls} inProgress={false} />
         )}
       </div>
 
-      {/* Response */}
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 10 }}>Response</div>
         <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65 }}>
-          <ReactMarkdown>{run.finalResponse}</ReactMarkdown>
+          <ReactMarkdown>{run!.finalResponse}</ReactMarkdown>
         </div>
       </div>
 
-      {/* Metrics footer */}
       <div style={{ padding: '12px 20px', background: T.cardHead, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <MetricBadge label="Latency" value={`${run.totalLatencyMs}ms`} color={accent} />
+        <MetricBadge label="Latency" value={`${run!.totalLatencyMs}ms`} color={accent} />
         <MetricBadge label="Tokens" value={totalTokens} />
-        <MetricBadge label="Tool calls" value={run.toolCalls.length} color={accent} />
-        <MetricBadge label="LLM turns" value={run.llmTurns} />
+        <MetricBadge label="Tool calls" value={run!.toolCalls.length} color={accent} />
+        <MetricBadge label="LLM turns" value={run!.llmTurns} />
       </div>
     </div>
   );
@@ -149,13 +234,13 @@ const EXAMPLE_PROMPTS = [
 ];
 
 type StreamState = {
+  prompt: string;
   without: AgentRun | null;
   with: AgentRun | null;
+  liveToolCalls: ToolCallRecord[];
   deltas: TraceResult['deltas'] | null;
-  prompt: string;
 };
 
-/** Computes percentage reduction from `from` to `to`, clamped to 0 when from=0. */
 function pctReduction(from: number, to: number): number {
   if (from === 0) return 0;
   return Math.round((from - to) / from * 100);
@@ -173,74 +258,66 @@ export default function Trace() {
 
     setLoading(true);
     setError(null);
-    setStream({ without: null, with: null, deltas: null, prompt: prompt.trim() });
+    setStream({ prompt: prompt.trim(), without: null, with: null, liveToolCalls: [], deltas: null });
 
-    try {
-      const url = `/api/trace/stream?prompt=${encodeURIComponent(prompt.trim())}`;
-      const es = new EventSource(url);
+    const url = `/api/trace/stream?prompt=${encodeURIComponent(prompt.trim())}`;
+    const es = new EventSource(url);
 
-      let withoutRun: AgentRun | null = null;
-      let withRun: AgentRun | null = null;
+    let withoutRun: AgentRun | null = null;
+    let withRun: AgentRun | null = null;
 
-      es.addEventListener('without', (e: MessageEvent) => {
-        withoutRun = JSON.parse(e.data) as AgentRun;
-        setStream(s => s ? { ...s, without: withoutRun } : s);
-      });
+    es.addEventListener('tool_call', (e: MessageEvent) => {
+      const record = JSON.parse(e.data) as ToolCallRecord;
+      setStream(s => s ? { ...s, liveToolCalls: [...s.liveToolCalls, record] } : s);
+    });
 
-      es.addEventListener('with', (e: MessageEvent) => {
-        withRun = JSON.parse(e.data) as AgentRun;
-        setStream(s => s ? { ...s, with: withRun } : s);
-      });
+    es.addEventListener('without', (e: MessageEvent) => {
+      withoutRun = JSON.parse(e.data) as AgentRun;
+      setStream(s => s ? { ...s, without: withoutRun } : s);
+    });
 
-      es.addEventListener('done', () => {
-        es.close();
-        setLoading(false);
-        // Compute deltas once both runs are known
-        if (withoutRun && withRun) {
-          const withoutTokens = withoutRun.inputTokens + withoutRun.outputTokens;
-          const withTokens = withRun.inputTokens + withRun.outputTokens;
-          const deltas: TraceResult['deltas'] = {
-            toolCallsPct: pctReduction(withoutRun.toolCalls.length, withRun.toolCalls.length),
-            llmTurnsPct: pctReduction(withoutRun.llmTurns, withRun.llmTurns),
-            latencyPct: pctReduction(withoutRun.totalLatencyMs, withRun.totalLatencyMs),
-            tokensPct: pctReduction(withoutTokens, withTokens),
-          };
-          setStream(s => s ? { ...s, deltas } : s);
-        }
-      });
+    es.addEventListener('with', (e: MessageEvent) => {
+      withRun = JSON.parse(e.data) as AgentRun;
+      setStream(s => s ? { ...s, with: withRun } : s);
+    });
 
-      es.addEventListener('error', (e: MessageEvent) => {
-        es.close();
-        setLoading(false);
-        try {
-          const data = JSON.parse(e.data);
-          setError(data.error ?? 'Trace failed');
-        } catch {
-          setError('Trace failed');
-        }
-        setStream(null);
-      });
-
-      // Handle connection-level errors (network, server down)
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) return;
-        es.close();
-        setLoading(false);
-        setError('Connection lost — is the server running?');
-        setStream(null);
-      };
-    } catch (err: any) {
+    es.addEventListener('done', () => {
+      es.close();
       setLoading(false);
-      setError(err.message ?? 'Trace failed');
+      if (withoutRun && withRun) {
+        const withoutTokens = withoutRun.inputTokens + withoutRun.outputTokens;
+        const withTokens = withRun.inputTokens + withRun.outputTokens;
+        setStream(s => s ? { ...s, deltas: {
+          toolCallsPct: pctReduction(withoutRun!.toolCalls.length, withRun!.toolCalls.length),
+          llmTurnsPct:  pctReduction(withoutRun!.llmTurns,         withRun!.llmTurns),
+          latencyPct:   pctReduction(withoutRun!.totalLatencyMs,   withRun!.totalLatencyMs),
+          tokensPct:    pctReduction(withoutTokens,                withTokens),
+        }} : s);
+      }
+    });
+
+    es.addEventListener('error', (e: MessageEvent) => {
+      es.close();
+      setLoading(false);
+      try { setError((JSON.parse(e.data) as any).error ?? 'Trace failed'); }
+      catch { setError('Trace failed'); }
       setStream(null);
-    }
+    });
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) return;
+      es.close();
+      setLoading(false);
+      setError('Connection lost — is the server running?');
+      setStream(null);
+    };
   }
 
-  const bothDone = stream?.without && stream?.with;
+  const bothDone = !!(stream?.without && stream?.with);
 
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
-      <style>{spinnerKeyframes}</style>
+      <style>{KEYFRAMES}</style>
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
@@ -271,17 +348,10 @@ export default function Trace() {
             {loading ? <><Spinner size={14} />Running…</> : 'Run Trace'}
           </button>
         </div>
-
-        {/* Example prompts */}
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           {EXAMPLE_PROMPTS.map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPrompt(p)}
-              disabled={loading}
-              style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}
-            >
+            <button key={p} type="button" onClick={() => setPrompt(p)} disabled={loading}
+              style={{ padding: '4px 10px', fontSize: '0.75rem', border: `1px solid ${T.border}`, borderRadius: 5, background: T.cardHead, color: T.muted, cursor: 'pointer' }}>
               {p}
             </button>
           ))}
@@ -298,24 +368,30 @@ export default function Trace() {
       {/* Results */}
       {stream && (
         <>
-          {/* Delta metrics — shown only when both agents are done */}
-          {bothDone && stream.deltas && <DeltaStrip deltas={stream.deltas} />}
+          {/* Big numbers + bar graph — only when both done */}
+          {bothDone && stream.deltas && (
+            <>
+              <DeltaStrip deltas={stream.deltas} />
+              <MetricsBarGraph without={stream.without!} with={stream.with!} deltas={stream.deltas} />
+            </>
+          )}
 
           <div style={{ marginBottom: 16, fontSize: '0.875rem', color: T.muted }}>
             Prompt: <span style={{ fontWeight: 600, color: T.text }}>"{stream.prompt}"</span>
           </div>
 
-          {/* Side-by-side panels — each appears as its agent completes */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <AgentPanel
               label="WITHOUT OneCall  (raw tool calls)"
-              run={stream.without}
               accent={T.withoutAccent}
+              run={stream.without}
+              liveToolCalls={stream.liveToolCalls}
+              waiting={loading && stream.liveToolCalls.length === 0}
             />
             <AgentPanel
               label="WITH OneCall  (harness injection)"
-              run={stream.with}
               accent={T.withAccent}
+              run={stream.with}
             />
           </div>
         </>

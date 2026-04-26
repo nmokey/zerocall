@@ -33,12 +33,19 @@ export interface AgentRun {
   snapshotInjected: boolean;
 }
 
-/** Runs a tool-use agentic loop until Claude returns end_turn. */
+/**
+ * Runs a tool-use agentic loop until Claude returns end_turn.
+ *
+ * @param onToolCall - Optional callback fired immediately when a tool call
+ *   completes, before the loop continues. Used by the SSE stream endpoint to
+ *   push live tool-call updates to the browser.
+ */
 async function runAgentLoop(
   client: Anthropic,
   prompt: string,
   tools: Tool[],
   handleToolCall: (name: string, input: Record<string, unknown>) => Promise<unknown>,
+  onToolCall?: (record: ToolCallRecord) => void,
 ): Promise<AgentRun> {
   const startTime = Date.now();
   const toolCalls: ToolCallRecord[] = [];
@@ -74,7 +81,9 @@ async function runAgentLoop(
       if (block.type !== 'tool_use') continue;
       const toolStart = Date.now();
       const result = await handleToolCall(block.name, block.input as Record<string, unknown>);
-      toolCalls.push({ tool: block.name, input: block.input as Record<string, unknown>, latencyMs: Date.now() - toolStart });
+      const record: ToolCallRecord = { tool: block.name, input: block.input as Record<string, unknown>, latencyMs: Date.now() - toolStart };
+      toolCalls.push(record);
+      onToolCall?.(record);
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
     }
     messages.push({ role: 'user', content: toolResults });
@@ -146,7 +155,7 @@ const RAW_TOOLS: Tool[] = [
  * @param prompt - The user's productivity question.
  * @returns AgentRun with real tool call records and final response.
  */
-export async function runWithoutOneCall(client: Anthropic, prompt: string): Promise<AgentRun> {
+export async function runWithoutOneCall(client: Anthropic, prompt: string, onToolCall?: (record: ToolCallRecord) => void): Promise<AgentRun> {
   const auth = await getAuthenticatedClient();
 
   let emailState: Awaited<ReturnType<typeof fetchEmailState>> | null = null;
@@ -187,7 +196,7 @@ export async function runWithoutOneCall(client: Anthropic, prompt: string): Prom
     }
   }
 
-  return runAgentLoop(client, prompt, RAW_TOOLS, handleToolCall);
+  return runAgentLoop(client, prompt, RAW_TOOLS, handleToolCall, onToolCall);
 }
 
 /**

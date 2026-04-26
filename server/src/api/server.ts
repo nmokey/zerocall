@@ -170,8 +170,9 @@ export function createApiServer(): express.Express {
       const client = new Anthropic({ apiKey });
 
       // Race both agents — each sends its event as soon as it resolves.
+      // runWithoutOneCall emits a 'tool_call' event for each tool as it completes.
       await Promise.all([
-        runWithoutOneCall(client, prompt).then(run => send('without', run)),
+        runWithoutOneCall(client, prompt, record => send('tool_call', record)).then(run => send('without', run)),
         runWithOneCall(client, prompt).then(run => send('with', run)),
       ]);
 
