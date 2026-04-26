@@ -15,7 +15,7 @@
     "@onecall/harness": "*",
     "better-sqlite3": "latest",
     "cors": "^2.8.6",
-    "dotenv": "latest",
+    "dotenv": "^16.4.5",
     "express": "^5.2.1",
     "google-auth-library": "latest",
     "googleapis": "latest"
