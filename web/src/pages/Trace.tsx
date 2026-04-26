@@ -399,7 +399,7 @@ function ZeroCallPanel({ run, elapsed, otherStillRunning }: {
           color: T.withAccent, fontSize: '0.75rem', fontWeight: 700,
           fontFamily: "'SF Mono', 'Fira Code', monospace",
         }}>
-          0 calls
+          {run.toolCalls.length} call{run.toolCalls.length !== 1 ? 's' : ''}
         </span>
         <span style={{
           padding: '3px 10px', borderRadius: 12,
@@ -421,7 +421,7 @@ function ZeroCallPanel({ run, elapsed, otherStillRunning }: {
             {otherStillRunning ? 'Already done' : 'Done'} — context auto-injected
           </span>
           <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>
-            0 tool calls — harness injected the snapshot before first token
+            {run.toolCalls.length} tool calls — harness injected the snapshot before first token
           </div>
         </div>
       </div>
@@ -438,7 +438,7 @@ function ZeroCallPanel({ run, elapsed, otherStillRunning }: {
       <div style={{ padding: '12px 20px', background: T.cardHead, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <MetricBadge label="Latency" value={`${run.totalLatencyMs}ms`} color={T.withAccent} />
         <MetricBadge label="Tokens" value={totalTokens} />
-        <MetricBadge label="Tool calls" value={0} color={T.withAccent} />
+        <MetricBadge label="Tool calls" value={run.toolCalls.length} color={T.withAccent} />
         <MetricBadge label="LLM turns" value={run.llmTurns} />
       </div>
     </div>
