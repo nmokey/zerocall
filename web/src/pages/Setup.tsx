@@ -153,10 +153,24 @@ export default function Setup({ onDone, T }: Props) {
   }
 
   async function handleSync() {
+    const previousLastSync = status?.lastSync;
     setSyncing(true);
     await triggerSync().catch(() => null);
-    setMessage({ type: 'success', text: 'Sync started.' });
-    setSyncing(false);
+
+    // Poll until lastSync timestamp changes, then update status
+    const pollInterval = setInterval(async () => {
+      try {
+        const newStatus = await getStatus();
+        if (newStatus.lastSync !== null && newStatus.lastSync !== previousLastSync) {
+          clearInterval(pollInterval);
+          setStatus(newStatus);
+          setSyncing(false);
+        }
+      } catch {
+        clearInterval(pollInterval);
+        setSyncing(false);
+      }
+    }, 1000);
   }
 
   async function handleGoogleAuth() {
@@ -178,7 +192,18 @@ export default function Setup({ onDone, T }: Props) {
   const pendingCount = allFields.filter(k => !present.includes(k)).length;
 
   const lastSync = status?.lastSync;
-  const syncLabel = lastSync ? `last sync · ${lastSync} · ` : 'No sync yet';
+  const syncLabel = lastSync ? (() => {
+    const now = new Date();
+    const syncTime = new Date(lastSync);
+    const diffMs = now.getTime() - syncTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'last sync · just now · ';
+    if (diffMins < 60) return `last sync · ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago · `;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `last sync · ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago · `;
+    const diffDays = Math.floor(diffHours / 24);
+    return `last sync · ${diffDays} day${diffDays !== 1 ? 's' : ''} ago · `;
+  })() : 'No sync yet';
 
   const tableHead: React.CSSProperties = {
     display: 'grid',
@@ -204,7 +229,7 @@ export default function Setup({ onDone, T }: Props) {
   };
 
   return (
-    <div style={{ padding: '48px 24px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
@@ -221,14 +246,13 @@ export default function Setup({ onDone, T }: Props) {
               </span>
             </span>
           )}
-          {!lastSync && <span style={{ fontSize: '0.78rem', color: T.dimmer }}>No sync yet</span>}
+          {!lastSync && !syncing && <span style={{ fontSize: '0.78rem', color: T.dimmer }}>No sync yet</span>}
           <button
             onClick={handleSync}
             disabled={syncing}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', fontSize: '0.82rem', fontWeight: 500, border: `1.5px solid ${T.border}`, borderRadius: 7, background: T.inputBg, color: T.text, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 500, border: `1px solid ${T.border}`, borderRadius: 6, background: syncing ? T.inputBg : T.primary, color: syncing ? T.text : 'white', cursor: syncing ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
           >
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: T.primary, flexShrink: 0, display: 'inline-block' }} />
-            {syncing ? 'Syncing…' : 'Sync now'}
+            {syncing ? 'Syncing...' : 'Sync'}
           </button>
         </div>
       </div>
