@@ -1,6 +1,6 @@
-# Extending OneCall
+# Extending ZeroCall
 
-OneCall is designed to be extensible. The `TaskProvider` interface makes adding new task management sources straightforward, and the snapshot structure accommodates additional data without breaking existing functionality.
+ZeroCall is designed to be extensible. The `TaskProvider` interface makes adding new task management sources straightforward, and the snapshot structure accommodates additional data without breaking existing functionality.
 
 ---
 
@@ -178,7 +178,7 @@ sources: Array<'gmail' | 'gcal' | 'notion' | 'slack'>;
 
 ## Design Principles
 
-When extending OneCall, keep these principles in mind:
+When extending ZeroCall, keep these principles in mind:
 
 1. **Read-only** — providers should only read data, never write. This keeps auth scopes minimal and demos safe.
 

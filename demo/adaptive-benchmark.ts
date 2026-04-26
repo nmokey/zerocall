@@ -1,5 +1,5 @@
 /**
- * Adaptive benchmark: demonstrates how OneCall learns from query patterns
+ * Adaptive benchmark: demonstrates how ZeroCall learns from query patterns
  * and trims the system prompt to the sections that actually matter.
  *
  * Phase 1 — baseline: runs a skewed prompt set (heavy calendar/task, light
@@ -12,8 +12,8 @@
  */
 import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
-import { OneCallAnthropic } from '@onecall/harness';
-import type { SectionConfig } from '@onecall/harness';
+import { ZeroCallAnthropic } from '@zerocall/harness';
+import type { SectionConfig } from '@zerocall/harness';
 import { MOCK_SNAPSHOT } from './data/mock.js';
 import { classifyQuery, type QueryCategory } from '../server/src/db/queryLog.js';
 
@@ -51,7 +51,7 @@ interface RunResult {
   latencyMs: number;
 }
 
-/** Runs all prompts through OneCallAnthropic with the given section config. */
+/** Runs all prompts through ZeroCallAnthropic with the given section config. */
 async function runPhase(
   client: Anthropic,
   config: SectionConfig,
@@ -69,14 +69,14 @@ async function runPhase(
     const category = classifyQuery(prompt.text);
     queryLog.push({ text: prompt.text, category });
 
-    const oneCall = new OneCallAnthropic({
+    const zeroCall = new ZeroCallAnthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
       snapshotGetter: () => MOCK_SNAPSHOT,
       configGetter: () => config,
     });
 
     const start = Date.now();
-    const response = await oneCall.messages.create({
+    const response = await zeroCall.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 512,
       messages: [{ role: 'user', content: prompt.text }],
@@ -130,7 +130,7 @@ async function main() {
   const client = new Anthropic({ apiKey });
 
   console.log('\n╔══════════════════════════════════════════════════════════╗');
-  console.log('║       OneCall  —  Adaptive System Prompt Demo           ║');
+  console.log('║       ZeroCall  —  Adaptive System Prompt Demo          ║');
   console.log('╚══════════════════════════════════════════════════════════╝');
   console.log('\nThis demo runs 15 prompts twice:');
   console.log('  Phase 1: all sections injected (baseline)');

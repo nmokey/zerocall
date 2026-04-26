@@ -74,7 +74,7 @@ function renderAdaptiveCard(): string {
       <div class="card-header">
         <span class="section-label">Adaptive Optimization</span>
       </div>
-      <p style="font-size:0.85rem;color:#8a7e70">Ask at least 5 questions through OneCall to unlock personalized context suggestions. (${stats.queryCount}/5 so far)</p>
+      <p style="font-size:0.85rem;color:#8a7e70">Ask at least 5 questions through ZeroCall to unlock personalized context suggestions. (${stats.queryCount}/5 so far)</p>
     </div>`;
   }
 
@@ -194,7 +194,7 @@ export function renderSetupPage(errors: string[] = [], saved: string | null = nu
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OneCall</title>
+  <title>ZeroCall</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ece8dc; color: #2a2218; min-height: 100vh; padding: 48px 24px; }
@@ -276,7 +276,7 @@ export function renderSetupPage(errors: string[] = [], saved: string | null = nu
   <div class="page">
     <div class="header">
       <div class="header-left">
-        <h1>OneCall</h1>
+        <h1>ZeroCall</h1>
         <p>Configure integrations and check connection status.</p>
       </div>
       <div class="header-right">

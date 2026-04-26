@@ -1,5 +1,5 @@
 {
-  "name": "onecall",
+  "name": "zerocall",
   "private": true,
   "description": "Your AI assistant reads the room before you ask.",
   "workspaces": ["harness", "server", "web"],

@@ -1,6 +1,6 @@
 # Authentication
 
-OneCall uses Google OAuth2 for Gmail and Calendar access, and a Notion integration token for task data.
+ZeroCall uses Google OAuth2 for Gmail and Calendar access, and a Notion integration token for task data.
 
 ---
 
@@ -13,7 +13,7 @@ https://www.googleapis.com/auth/gmail.readonly
 https://www.googleapis.com/auth/calendar.readonly
 ```
 
-Both scopes are read-only — OneCall never sends emails, creates events, or modifies any data.
+Both scopes are read-only — ZeroCall never sends emails, creates events, or modifies any data.
 
 ### OAuth Client
 

@@ -1,6 +1,6 @@
 # Providers
 
-OneCall syncs data from three sources: Gmail, Google Calendar, and Notion. Each provider is implemented as a standalone module in `src/providers/`.
+ZeroCall syncs data from three sources: Gmail, Google Calendar, and Notion. Each provider is implemented as a standalone module in `src/providers/`.
 
 ---
 

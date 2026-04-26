@@ -1,4 +1,4 @@
-# OneCall Demo Scripts
+# ZeroCall Demo Scripts
 
 Two scripts for showing judges the before/after story.
 
@@ -31,12 +31,12 @@ npm run demo:trace -- p04
 npm run demo:trace -- 7
 ```
 
-**Uses mocked data** so it runs offline without provider credentials. To use real data, swap the `runWithoutOneCall` and `runWithOneCall` implementations in `agents/` to call live APIs.
+**Uses mocked data** so it runs offline without provider credentials. To use real data, swap the `runWithoutZeroCall` and `runWithZeroCall` implementations in `agents/` to call live APIs.
 
 **Sample output:**
 
 ```
-WITHOUT OneCall  (raw tool calls)
+WITHOUT ZeroCall  (raw tool calls)
 ────────────────────────────────────────────────────────────
   1. gmail_search_threads {"query":"newer_than:2d"}  12ms
   2. gmail_get_thread {"thread_id":"th_001"}  8ms
@@ -46,7 +46,7 @@ WITHOUT OneCall  (raw tool calls)
 
   Total latency: 2340ms   Tokens: 3120   Tool calls: 5
 
-WITH OneCall  (get_work_state)
+WITH ZeroCall  (get_work_state)
 ────────────────────────────────────────────────────────────
   1. get_work_state   0ms
 

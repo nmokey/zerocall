@@ -1,6 +1,6 @@
 import { readLatestSnapshot } from '../db/snapshot.js';
 import { syncAll } from './syncAll.js';
-import type { WorkStateSnapshot } from '@onecall/harness';
+import type { WorkStateSnapshot } from '@zerocall/harness';
 
 const DEFAULT_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
 

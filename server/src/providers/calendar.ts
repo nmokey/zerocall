@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
-import type { CalendarEvent, TimeBlock } from '@onecall/harness';
+import type { CalendarEvent, TimeBlock } from '@zerocall/harness';
 
 export async function fetchCalendarState(auth: OAuth2Client): Promise<{
   today: CalendarEvent[];

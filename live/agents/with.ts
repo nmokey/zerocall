@@ -1,1 +1,1 @@
-export { runWithOneCall } from '@onecall/server';
+export { runWithZeroCall } from '@zerocall/server';

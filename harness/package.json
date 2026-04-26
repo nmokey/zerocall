@@ -1,5 +1,5 @@
 {
-  "name": "@onecall/harness",
+  "name": "@zerocall/harness",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",

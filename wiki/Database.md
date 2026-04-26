@@ -1,6 +1,6 @@
 # Database
 
-OneCall uses SQLite (via `better-sqlite3`) for snapshot persistence and sync logging. The database is local, requires no external service, and reads complete in sub-millisecond time.
+ZeroCall uses SQLite (via `better-sqlite3`) for snapshot persistence and sync logging. The database is local, requires no external service, and reads complete in sub-millisecond time.
 
 ---
 
@@ -9,7 +9,7 @@ OneCall uses SQLite (via `better-sqlite3`) for snapshot persistence and sync log
 A singleton `better-sqlite3` instance with WAL (Write-Ahead Logging) mode enabled for concurrent read/write performance:
 
 ```typescript
-const DB_PATH = path.resolve(__dirname, '../../onecall.db');
+const DB_PATH = path.resolve(__dirname, '../../zerocall.db');
 
 export function getDb(): Database.Database {
   if (!instance) {
@@ -20,7 +20,7 @@ export function getDb(): Database.Database {
 }
 ```
 
-The database file is created at `onecall.db` in the project root.
+The database file is created at `zerocall.db` in the project root.
 
 ---
 

@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import type { TaskProvider } from './types.js';
-import type { Task } from '@onecall/harness';
+import type { Task } from '@zerocall/harness';
 
 export class NotionProvider implements TaskProvider {
   name = 'notion' as const;

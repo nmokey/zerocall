@@ -53,15 +53,15 @@ function printRun(label: string, color: string, run: AgentRun) {
 
 /** Agent function signatures that demo/ and live/ each provide. */
 export interface TraceAgents {
-  runWithoutOneCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
-  runWithOneCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
+  runWithoutZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
+  runWithZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
 }
 
 /**
  * Runs one prompt through both agents and prints a color-coded side-by-side
  * trace with a delta summary.
  *
- * @param title - Header text (e.g. "OneCall Trace Demo" or "OneCall Live Trace").
+ * @param title - Header text (e.g. "ZeroCall Trace Demo" or "ZeroCall Live Trace").
  * @param agents - The agent functions to compare.
  */
 export async function runTrace(title: string, agents: TraceAgents): Promise<void> {
@@ -91,12 +91,12 @@ export async function runTrace(title: string, agents: TraceAgents): Promise<void
   console.log(`Running both agents in parallel...`);
 
   const [without, with_] = await Promise.all([
-    agents.runWithoutOneCall(client, promptText),
-    agents.runWithOneCall(client, promptText),
+    agents.runWithoutZeroCall(client, promptText),
+    agents.runWithZeroCall(client, promptText),
   ]);
 
-  printRun('WITHOUT OneCall  (raw tool calls)', RED, without);
-  printRun('WITH OneCall  (harness injection)', GREEN, with_);
+  printRun('WITHOUT ZeroCall  (raw tool calls)', RED, without);
+  printRun('WITH ZeroCall  (harness injection)', GREEN, with_);
 
   const toolDelta = without.toolCalls.length - with_.toolCalls.length;
   const turnDelta = (without.llmTurns ?? 1) - (with_.llmTurns ?? 1);

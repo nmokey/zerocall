@@ -1,7 +1,7 @@
 /**
  * Agent implementations for the side-by-side trace comparison.
  *
- * Contains both runWithoutOneCall (raw tool-call loop) and runWithOneCall
+ * Contains both runWithoutZeroCall (raw tool-call loop) and runWithZeroCall
  * (harness injection). The agent loop logic is inlined here because the server
  * build is scoped to src/ and cannot import from the shared/ directory.
  *
@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
-import { OneCallAnthropic } from '@onecall/harness';
+import { ZeroCallAnthropic } from '@zerocall/harness';
 import { getAuthenticatedClient } from '../auth/google.js';
 import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
@@ -94,7 +94,7 @@ async function runAgentLoop(
 
 const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
-/** Builds the raw tool definitions for the without-OneCall agent, with today's date computed fresh per call. */
+/** Builds the raw tool definitions for the without-ZeroCall agent, with today's date computed fresh per call. */
 function buildRawTools(): Tool[] {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
   return [
@@ -159,7 +159,7 @@ function buildRawTools(): Tool[] {
  * @param prompt - The user's productivity question.
  * @returns AgentRun with real tool call records and final response.
  */
-export async function runWithoutOneCall(client: Anthropic, prompt: string, onToolCall?: (record: ToolCallRecord) => void): Promise<AgentRun> {
+export async function runWithoutZeroCall(client: Anthropic, prompt: string, onToolCall?: (record: ToolCallRecord) => void): Promise<AgentRun> {
   const auth = await getAuthenticatedClient();
 
   let emailState: Awaited<ReturnType<typeof fetchEmailState>> | null = null;
@@ -204,23 +204,23 @@ export async function runWithoutOneCall(client: Anthropic, prompt: string, onToo
 }
 
 /**
- * Runs a productivity prompt through the OneCall harness.
+ * Runs a productivity prompt through the ZeroCall harness.
  *
  * Ensures a fresh snapshot is available (either existing or newly synced),
- * then injects it via OneCallAnthropic before the first token. Zero tool calls.
+ * then injects it via ZeroCallAnthropic before the first token. Zero tool calls.
  *
- * @param _client - Unused; OneCallAnthropic creates its own client with the snapshot getter.
+ * @param _client - Unused; ZeroCallAnthropic creates its own client with the snapshot getter.
  * @param prompt - The user's productivity question.
  * @returns AgentRun with snapshotInjected=true and no tool calls.
  */
-export async function runWithOneCall(_client: Anthropic, prompt: string): Promise<AgentRun> {
-  const ocClient = new OneCallAnthropic({
+export async function runWithZeroCall(_client: Anthropic, prompt: string): Promise<AgentRun> {
+  const zcClient = new ZeroCallAnthropic({
     apiKey: process.env.ANTHROPIC_API_KEY!,
     snapshotGetter: () => ensureFreshSnapshot(),
   });
 
   const startTime = Date.now();
-  const response = await ocClient.messages.create({
+  const response = await zcClient.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],

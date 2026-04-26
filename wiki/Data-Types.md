@@ -143,4 +143,4 @@ interface TaskProvider {
 }
 ```
 
-This interface makes providers swappable and new sources drop-in additions. See [Extending OneCall](Extending-OneCall.md) for how to add a new provider.
+This interface makes providers swappable and new sources drop-in additions. See [Extending ZeroCall](Extending-ZeroCall.md) for how to add a new provider.
