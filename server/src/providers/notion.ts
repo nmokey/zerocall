@@ -1,33 +1,38 @@
-import { Client } from '@notionhq/client';
 import type { TaskProvider } from './types.js';
 import type { Task } from '@zerocall/harness';
 import { todayLocalDate } from '@zerocall/harness';
 
 export class NotionProvider implements TaskProvider {
   name = 'notion' as const;
-  private client: Client;
+  private token: string;
   private databaseId: string;
 
   constructor() {
-    this.client = new Client({ auth: process.env.NOTION_TOKEN! });
+    this.token = process.env.NOTION_TOKEN!;
     this.databaseId = process.env.NOTION_DATABASE_ID!;
   }
 
   async getTasks(): Promise<{ overdue: Task[]; due_today: Task[]; in_progress: Task[] }> {
-    // Use raw request to POST /databases/{id}/query — the typed databases.query()
-    // was removed in the current SDK, but the REST endpoint is still supported and
-    // is the only way to scope results to a specific database.
-    const response = await this.client.request<{
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      results: Array<{ id: string; object: string; properties: Record<string, any>; url?: string }>;
-    }>({
-      path: `databases/${this.databaseId}/query`,
-      method: 'post',
-      body: {
+    // client.request() is broken in @notionhq/client v5 for database queries
+    // (returns invalid_request_url). Use fetch directly against the REST endpoint.
+    const res = await fetch(`https://api.notion.com/v1/databases/${this.databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
         page_size: 100,
-      },
+      }),
     });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Notion API error ${res.status}: ${text}`);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await res.json() as { results: Array<{ id: string; object: string; properties: Record<string, any>; url?: string }> };
 
     const overdue: Task[] = [];
     const due_today: Task[] = [];
