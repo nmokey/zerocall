@@ -318,7 +318,7 @@ The Express server runs on port 3000 and serves `web/dist/` as the SPA. During d
 
 #### Notion (via Notion API)
 
-- Use `client.search({ filter: { value: 'page', property: 'object' } })` — `databases.query` was removed in the current `@notionhq/client` version
+- Use `client.request()` to call `POST /databases/{id}/query` — the typed `databases.query()` was removed in the current `@notionhq/client` SDK, but the REST endpoint is still supported and scopes results to the configured database
 - Property extraction is schema-agnostic: iterate all properties and match by `type` (`title`, `date`, `status`, `select`) rather than by name
 - Auth: Notion integration token (set in `.env`). The integration must be explicitly connected to the target database via Notion's Connections menu.
 
