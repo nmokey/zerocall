@@ -16,6 +16,12 @@ const T = {
   error: '#b53030',
   withoutAccent: '#b53030',
   withAccent: '#2e7d4f',
+  traceBg: '#1e1b16',
+  traceText: '#d4cfc4',
+  traceGreen: '#6ec87a',
+  traceYellow: '#e0b050',
+  traceRed: '#e06050',
+  traceDim: '#6a6458',
 };
 
 // ─── Animations ───────────────────────────────────────────────────────────────
@@ -26,6 +32,8 @@ const KEYFRAMES = `
 @keyframes oc-slidein   { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes oc-toastin   { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes oc-toastout  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes oc-pulse     { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes oc-blink     { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 `;
 
 // ─── Sync toast ───────────────────────────────────────────────────────────────
@@ -58,6 +66,28 @@ function Spinner({ size = 16 }: { size?: number }) {
   return (
     <span style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${T.border}`, borderTopColor: T.primary, borderRadius: '50%', animation: 'oc-spin 0.7s linear infinite', verticalAlign: 'middle', marginRight: 8, flexShrink: 0 }} />
   );
+}
+
+// ─── Elapsed time hook ────────────────────────────────────────────────────────
+
+function useElapsed(running: boolean): number {
+  const startRef = useRef<number>(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!running) return;
+    startRef.current = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(Date.now() - startRef.current), 100);
+    return () => clearInterval(id);
+  }, [running]);
+
+  return elapsed;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 // ─── Big delta metrics strip ──────────────────────────────────────────────────
@@ -134,7 +164,160 @@ function MetricsBarGraph({ without, with: with_, deltas }: { without: AgentRun; 
   );
 }
 
-// ─── Agent panel ──────────────────────────────────────────────────────────────
+// ─── Tool Call Trace Panel (left side — terminal style) ───────────────────────
+
+function ToolCallTracePanel({ calls, inProgress, run, elapsed }: {
+  calls: ToolCallRecord[];
+  inProgress: boolean;
+  run: AgentRun | null;
+  elapsed: number;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [calls.length, inProgress]);
+
+  const isDone = !!run;
+  const callCount = isDone ? run.toolCalls.length : calls.length;
+
+  return (
+    <div style={{
+      flex: 1, minWidth: 0, borderRadius: 10, overflow: 'hidden',
+      border: `1.5px solid ${isDone ? T.border : T.withoutAccent}`,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '14px 20px', background: T.traceBg,
+        borderBottom: `3px solid ${T.withoutAccent}`,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: T.traceRed }}>
+            WITHOUT ZeroCall
+          </div>
+          <div style={{ fontSize: '0.7rem', color: T.traceDim, marginTop: 2 }}>
+            raw tool calls
+          </div>
+        </div>
+        {/* Call counter badge */}
+        {(inProgress || isDone) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              padding: '3px 10px', borderRadius: 12,
+              background: isDone ? 'rgba(181,48,48,0.15)' : 'rgba(224,96,80,0.2)',
+              color: T.traceRed, fontSize: '0.75rem', fontWeight: 700,
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+            }}>
+              {callCount} call{callCount !== 1 ? 's' : ''}
+            </span>
+            <span style={{
+              padding: '3px 10px', borderRadius: 12,
+              background: 'rgba(224,176,80,0.15)',
+              color: T.traceYellow, fontSize: '0.75rem', fontWeight: 600,
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+            }}>
+              {isDone ? formatMs(run.totalLatencyMs) : formatMs(elapsed)}
+            </span>
+          </div>
+        )}
+        {inProgress && <Spinner size={13} />}
+      </div>
+
+      {/* Trace log */}
+      <div ref={scrollRef} style={{
+        background: T.traceBg, padding: '12px 16px',
+        fontFamily: "'SF Mono', 'Fira Code', Consolas, monospace",
+        fontSize: '0.78rem', lineHeight: 1.8,
+        minHeight: 200, maxHeight: 400, overflowY: 'auto',
+        flex: 1,
+      }}>
+        {/* Initial prompt line */}
+        {(calls.length > 0 || inProgress || isDone) && (
+          <div style={{ color: T.traceDim, marginBottom: 8 }}>
+            <span style={{ color: T.traceGreen }}>$</span> agent.run(prompt)
+          </div>
+        )}
+
+        {/* Tool call entries */}
+        {(isDone ? run.toolCalls : calls).map((tc, i) => {
+          const cumMs = (isDone ? run.toolCalls : calls)
+            .slice(0, i + 1)
+            .reduce((sum, c) => sum + c.latencyMs, 0);
+          return (
+            <div key={i} style={{ animation: 'oc-slidein 0.25s ease', marginBottom: 4 }}>
+              <div>
+                <span style={{ color: T.traceDim }}>[{formatMs(cumMs)}]</span>{' '}
+                <span style={{ color: T.traceYellow }}>TOOL</span>{' '}
+                <span style={{ color: T.traceText, fontWeight: 600 }}>{tc.tool}</span>
+                <span style={{ color: T.traceDim, marginLeft: 8 }}>({tc.latencyMs}ms)</span>
+              </div>
+              {Object.keys(tc.input).length > 0 && (
+                <div style={{ color: T.traceDim, paddingLeft: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {(() => {
+                    const s = JSON.stringify(tc.input);
+                    return s.length > 80 ? s.slice(0, 80) + '...' : s;
+                  })()}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* In-flight indicator */}
+        {inProgress && !isDone && (
+          <div style={{ color: T.traceYellow, animation: 'oc-pulse 1.5s ease infinite' }}>
+            <span style={{ color: T.traceDim }}>[{formatMs(elapsed)}]</span>{' '}
+            <span style={{ color: T.traceYellow }}>TOOL</span>{' '}
+            calling...
+            <span style={{ animation: 'oc-blink 1s step-end infinite' }}>_</span>
+          </div>
+        )}
+
+        {/* Waiting for first call */}
+        {!isDone && calls.length === 0 && inProgress && (
+          <div style={{ color: T.traceDim, animation: 'oc-pulse 1.5s ease infinite' }}>
+            <span style={{ color: T.traceGreen }}>$</span> waiting for LLM to decide on tools...
+            <span style={{ animation: 'oc-blink 1s step-end infinite' }}>_</span>
+          </div>
+        )}
+
+        {/* Done summary line */}
+        {isDone && (
+          <div style={{ marginTop: 8, color: T.traceRed, fontWeight: 600 }}>
+            <span style={{ color: T.traceDim }}>[{formatMs(run.totalLatencyMs)}]</span>{' '}
+            DONE — {run.toolCalls.length} tool calls, {run.llmTurns} LLM turns, {run.inputTokens + run.outputTokens} tokens
+          </div>
+        )}
+      </div>
+
+      {/* Completed response */}
+      {isDone && (
+        <div style={{ background: T.card, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 10 }}>Response</div>
+            <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65 }}>
+              <ReactMarkdown>{run.finalResponse}</ReactMarkdown>
+            </div>
+          </div>
+          <div style={{ padding: '12px 20px', background: T.cardHead, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <MetricBadge label="Latency" value={`${run.totalLatencyMs}ms`} color={T.withoutAccent} />
+            <MetricBadge label="Tokens" value={run.inputTokens + run.outputTokens} />
+            <MetricBadge label="Tool calls" value={run.toolCalls.length} color={T.withoutAccent} />
+            <MetricBadge label="LLM turns" value={run.llmTurns} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ZeroCall Panel (right side) ──────────────────────────────────────────────
 
 function MetricBadge({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
@@ -144,56 +327,42 @@ function MetricBadge({ label, value, color }: { label: string; value: string | n
   );
 }
 
-/** Tool call list — used both for live (in-progress) and completed states. */
-function ToolCallList({ calls, inProgress }: { calls: ToolCallRecord[]; inProgress: boolean }) {
-  if (calls.length === 0 && !inProgress) {
-    return <div style={{ fontSize: '0.82rem', color: T.muted, fontStyle: 'italic' }}>No tool calls</div>;
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {calls.map((tc, i) => {
-        const argStr = Object.keys(tc.input).length > 0 ? JSON.stringify(tc.input) : '';
-        const truncated = argStr.length > 70 ? argStr.slice(0, 70) + '…' : argStr;
-        return (
-          <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: '0.78rem', animation: 'oc-slidein 0.25s ease' }}>
-            <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{i + 1}.</span>
-            <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, color: T.text }}>{tc.tool}</span>
-            {truncated && <span style={{ color: T.dimmer, fontFamily: "'SF Mono', 'Fira Code', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{truncated}</span>}
-            <span style={{ color: '#c87830', fontWeight: 500, flexShrink: 0 }}>{tc.latencyMs}ms</span>
-          </div>
-        );
-      })}
-      {/* Spinner row for the next in-flight tool call */}
-      {inProgress && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: T.muted, animation: 'oc-slidein 0.25s ease' }}>
-          <span style={{ color: T.withoutAccent, fontWeight: 600, flexShrink: 0 }}>{calls.length + 1}.</span>
-          <Spinner size={12} />
-          <span>calling tool…</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface AgentPanelProps {
-  label: string;
-  accent: string;
+function ZeroCallPanel({ run, elapsed, otherStillRunning }: {
   run: AgentRun | null;
-  /** Live tool calls streamed before the run completes (without-agent only). */
-  liveToolCalls?: ToolCallRecord[];
-  /** True while the agent is still running but hasn't fired any tool calls yet. */
-  waiting?: boolean;
-}
+  elapsed: number;
+  otherStillRunning: boolean;
+}) {
+  const isDone = !!run;
 
-function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }: AgentPanelProps) {
-  const isLive = !run; // still running
-
-  // Pending — no data yet at all
-  if (isLive && liveToolCalls.length === 0 && !waiting) {
+  // Waiting state
+  if (!isDone) {
     return (
-      <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
-        <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
-          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent }}>{label}</div>
+      <div style={{
+        flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10,
+        overflow: 'hidden', background: T.card,
+      }}>
+        <div style={{
+          padding: '14px 20px', background: T.cardHead,
+          borderBottom: `3px solid ${T.withAccent}`,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: T.withAccent }}>
+              WITH ZeroCall
+            </div>
+            <div style={{ fontSize: '0.7rem', color: T.muted, marginTop: 2 }}>
+              harness injection
+            </div>
+          </div>
+          <span style={{
+            padding: '3px 10px', borderRadius: 12,
+            background: 'rgba(224,176,80,0.15)',
+            color: '#c87830', fontSize: '0.75rem', fontWeight: 600,
+            fontFamily: "'SF Mono', 'Fira Code', monospace",
+          }}>
+            {formatMs(elapsed)}
+          </span>
+          <Spinner size={13} />
         </div>
         <div style={{ padding: '48px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: '0.85rem' }}>
           <Spinner />Running…
@@ -202,52 +371,75 @@ function AgentPanel({ label, accent, run, liveToolCalls = [], waiting = false }:
     );
   }
 
-  // Live view — agent still running, show accumulated tool calls
-  if (isLive) {
-    return (
-      <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card }}>
-        <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent, flex: 1 }}>{label}</div>
-          <Spinner size={13} />
-        </div>
-        <div style={{ padding: '16px 20px' }}>
-          <ToolCallList calls={liveToolCalls} inProgress={true} />
-        </div>
-      </div>
-    );
-  }
-
-  // Completed
-  const totalTokens = run!.inputTokens + run!.outputTokens;
+  // Done state
+  const totalTokens = run.inputTokens + run.outputTokens;
   return (
-    <div style={{ flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', background: T.card, animation: 'oc-fadein 0.35s ease' }}>
-      <div style={{ padding: '14px 20px', background: T.cardHead, borderBottom: `3px solid ${accent}` }}>
-        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: accent }}>{label}</div>
-      </div>
-
-      <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
-        {run!.snapshotInjected ? (
-          <div style={{ fontSize: '0.82rem', color: T.withAccent }}>
-            <span style={{ fontWeight: 600 }}>✦ Work context auto-injected</span>
-            <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>0 tool calls — harness injected the snapshot before first token</div>
+    <div style={{
+      flex: 1, minWidth: 0, borderRadius: 10, overflow: 'hidden',
+      border: `1.5px solid ${otherStillRunning ? T.withAccent : T.border}`,
+      background: T.card, animation: 'oc-fadein 0.35s ease',
+      boxShadow: otherStillRunning ? `0 0 12px rgba(46,125,79,0.15)` : 'none',
+    }}>
+      <div style={{
+        padding: '14px 20px', background: T.cardHead,
+        borderBottom: `3px solid ${T.withAccent}`,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: T.withAccent }}>
+            WITH ZeroCall
           </div>
-        ) : (
-          <ToolCallList calls={run!.toolCalls} inProgress={false} />
-        )}
+          <div style={{ fontSize: '0.7rem', color: T.muted, marginTop: 2 }}>
+            harness injection
+          </div>
+        </div>
+        <span style={{
+          padding: '3px 10px', borderRadius: 12,
+          background: 'rgba(46,125,79,0.15)',
+          color: T.withAccent, fontSize: '0.75rem', fontWeight: 700,
+          fontFamily: "'SF Mono', 'Fira Code', monospace",
+        }}>
+          0 calls
+        </span>
+        <span style={{
+          padding: '3px 10px', borderRadius: 12,
+          background: 'rgba(46,125,79,0.15)',
+          color: T.withAccent, fontSize: '0.75rem', fontWeight: 600,
+          fontFamily: "'SF Mono', 'Fira Code', monospace",
+        }}>
+          {formatMs(run.totalLatencyMs)}
+        </span>
       </div>
 
+      {/* Snapshot injected banner */}
+      <div style={{
+        padding: '14px 20px', borderBottom: `1px solid ${T.border}`,
+        background: otherStillRunning ? 'rgba(46,125,79,0.06)' : 'transparent',
+      }}>
+        <div style={{ fontSize: '0.82rem', color: T.withAccent }}>
+          <span style={{ fontWeight: 600 }}>
+            {otherStillRunning ? 'Already done' : 'Done'} — context auto-injected
+          </span>
+          <div style={{ color: T.muted, marginTop: 4, fontSize: '0.78rem' }}>
+            0 tool calls — harness injected the snapshot before first token
+          </div>
+        </div>
+      </div>
+
+      {/* Response */}
       <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginBottom: 10 }}>Response</div>
         <div style={{ fontSize: '0.85rem', color: T.text, lineHeight: 1.65 }}>
-          <ReactMarkdown>{run!.finalResponse}</ReactMarkdown>
+          <ReactMarkdown>{run.finalResponse}</ReactMarkdown>
         </div>
       </div>
 
+      {/* Metrics footer */}
       <div style={{ padding: '12px 20px', background: T.cardHead, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <MetricBadge label="Latency" value={`${run!.totalLatencyMs}ms`} color={accent} />
+        <MetricBadge label="Latency" value={`${run.totalLatencyMs}ms`} color={T.withAccent} />
         <MetricBadge label="Tokens" value={totalTokens} />
-        <MetricBadge label="Tool calls" value={run!.toolCalls.length} color={accent} />
-        <MetricBadge label="LLM turns" value={run!.llmTurns} />
+        <MetricBadge label="Tool calls" value={0} color={T.withAccent} />
+        <MetricBadge label="LLM turns" value={run.llmTurns} />
       </div>
     </div>
   );
@@ -298,6 +490,8 @@ export default function Trace() {
     const id = setInterval(check, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  const elapsed = useElapsed(loading);
 
   async function handleRun(e: React.FormEvent) {
     e.preventDefault();
@@ -361,6 +555,7 @@ export default function Trace() {
   }
 
   const bothDone = !!(stream?.without && stream?.with);
+  const withDoneWithoutPending = !!(stream?.with && !stream?.without);
 
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
@@ -409,7 +604,7 @@ export default function Trace() {
       {/* Error */}
       {error && (
         <div style={{ padding: '13px 18px', borderRadius: 8, background: '#fdf0f0', border: '1px solid #efb8b8', color: T.error, fontSize: '0.875rem', marginBottom: 24 }}>
-          ✗ {error}
+          {error}
         </div>
       )}
 
@@ -428,18 +623,18 @@ export default function Trace() {
             Prompt: <span style={{ fontWeight: 600, color: T.text }}>"{stream.prompt}"</span>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <AgentPanel
-              label="WITHOUT ZeroCall  (raw tool calls)"
-              accent={T.withoutAccent}
+          {/* Side-by-side: Trace on left, ZeroCall on right */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
+            <ToolCallTracePanel
+              calls={stream.liveToolCalls}
+              inProgress={loading && !stream.without}
               run={stream.without}
-              liveToolCalls={stream.liveToolCalls}
-              waiting={loading && stream.liveToolCalls.length === 0}
+              elapsed={elapsed}
             />
-            <AgentPanel
-              label="WITH ZeroCall  (harness injection)"
-              accent={T.withAccent}
+            <ZeroCallPanel
               run={stream.with}
+              elapsed={elapsed}
+              otherStillRunning={withDoneWithoutPending}
             />
           </div>
         </>
