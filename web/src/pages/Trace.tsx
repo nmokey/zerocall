@@ -49,26 +49,31 @@ function Spinner({ size = 16, T }: { size?: number; T: Theme }) {
 
 // ─── Big delta metrics strip ──────────────────────────────────────────────────
 
-function DeltaStrip({ deltas, T }: { deltas: TraceResult['deltas']; T: Theme }) {
+function DeltaStrip({ without, with: with_, deltas, T }: { without: AgentRun; with: AgentRun; deltas: TraceResult['deltas']; T: Theme }) {
+  const llmTurnsSaved = without.llmTurns - with_.llmTurns;
+
   const items = [
-    { label: 'tool calls', value: deltas.toolCallsPct },
-    { label: 'LLM turns', value: deltas.llmTurnsPct },
-    { label: 'latency', value: deltas.latencyPct },
-    { label: 'tokens', value: deltas.tokensPct },
+    { label: 'tool calls',      display: `${with_.toolCalls.length}`,      sublabel: 'with ZeroCall' },
+    { label: 'LLM turns saved', display: `${llmTurnsSaved}`,               sublabel: `${without.llmTurns} → ${with_.llmTurns}` },
+    { label: 'faster',          display: `${deltas.latencyPct}%`,          sublabel: 'latency reduction' },
+    { label: 'fewer tokens',    display: `${deltas.tokensPct}%`,           sublabel: 'token reduction' },
   ];
 
   const overlineGradient = `linear-gradient(90deg, ${T.withAccent}, ${T.primary})`;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 12, marginBottom: 20, animation: 'oc-fadein 0.4s ease' }}>
-      {items.map(({ label, value }) => (
+      {items.map(({ label, display, sublabel }) => (
         <div key={label} style={{ textAlign: 'center', padding: '20px 12px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: overlineGradient }} />
           <div style={{ fontSize: '3rem', fontWeight: 800, color: T.withAccent, letterSpacing: '-0.03em', lineHeight: 1 }}>
-            {value}%
+            {display}
           </div>
           <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.dimmer, marginTop: 8 }}>
-            fewer {label}
+            {label}
+          </div>
+          <div style={{ fontSize: '0.7rem', color: T.muted, marginTop: 4 }}>
+            {sublabel}
           </div>
         </div>
       ))}
@@ -673,7 +678,7 @@ export default function Trace({ T }: { T: Theme }) {
         <>
           {bothDone && stream.deltas && (
             <>
-              <DeltaStrip deltas={stream.deltas} T={T} />
+              <DeltaStrip without={stream.without!} with={stream.with!} deltas={stream.deltas} T={T} />
               <MetricsBarGraph without={stream.without!} with={stream.with!} deltas={stream.deltas} T={T} />
             </>
           )}

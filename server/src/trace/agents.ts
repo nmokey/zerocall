@@ -82,7 +82,13 @@ async function runAgentLoop(
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue;
       const toolStart = Date.now();
-      const result = await handleToolCall(block.name, block.input as Record<string, unknown>);
+      let result: unknown;
+      try {
+        result = await handleToolCall(block.name, block.input as Record<string, unknown>);
+      } catch (err: any) {
+        console.error(`[agent] tool call failed: ${block.name}:`, err);
+        result = { error: `Tool ${block.name} failed: ${err?.message ?? String(err)}` };
+      }
       const record: ToolCallRecord = { tool: block.name, input: block.input as Record<string, unknown>, latencyMs: Date.now() - toolStart };
       toolCalls.push(record);
       onToolCall?.(record);
