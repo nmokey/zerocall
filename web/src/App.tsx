@@ -77,7 +77,12 @@ export default function App() {
   useEffect(() => {
     getStatus()
       .then(s => {
-        setAppState(s.configured && s.authenticated ? 'ready' : 'setup');
+        if (s.configured && s.authenticated) {
+          setAppState('ready');
+          setPage('trace');
+        } else {
+          setAppState('setup');
+        }
       })
       .catch(() => {
         setAppState('setup');
