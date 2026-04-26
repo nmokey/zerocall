@@ -62,9 +62,9 @@ export function createApiServer(): express.Express {
     res.json({ ...getConfigStatus(), integrations: getIntegrationPreferences() });
   });
 
-  app.post('/api/config', (req, res) => {
+  app.post('/api/config', async (req, res) => {
     const credentials = req.body as Record<string, string>;
-    const errors = validatePartialConfig(credentials);
+    const errors = await validatePartialConfig(credentials);
     if (errors.length > 0) {
       res.status(400).json({ error: errors[0] });
       return;

@@ -37,6 +37,7 @@ interface SlackConversation {
     ts: string;
     text?: string;
     user?: string;
+    bot_id?: string;
   };
 }
 
@@ -59,6 +60,59 @@ interface UsersInfoResponse extends SlackApiResponse {
 }
 
 /**
+ * Module-level cache for `auth.test` results, keyed by token. Persists across
+ * SlackProvider instances (which are reconstructed every sync cycle) so that
+ * the Tier-1-rate-limited (1 req/min) auth.test call is made at most once per
+ * 30 minutes per token.
+ */
+const authCache: Map<string, { userId: string; team: string; cachedAt: number }> = new Map();
+const AUTH_CACHE_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Module-level cache for resolved user display names, keyed by user ID.
+ * Display names rarely change, so a long TTL is fine; this primarily exists to
+ * deduplicate users.info calls across sync cycles.
+ */
+const userNameCache: Map<string, { name: string; cachedAt: number }> = new Map();
+const USER_CACHE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Live-validates a Slack user token by calling auth.test. On success, primes
+ * the module-level authCache so the next sync cycle can skip its own auth.test.
+ * Returns null on success, or a human-readable error message on failure.
+ *
+ * Used by the config save endpoint to reject obviously bad tokens at the
+ * point the user pastes them in, rather than letting the first sync fail.
+ */
+export async function validateSlackToken(token: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://slack.com/api/auth.test', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      return `Slack token validation failed: HTTP ${res.status}`;
+    }
+    const data = (await res.json()) as AuthTestResponse;
+    if (!data.ok) {
+      return `Slack token is invalid: ${data.error ?? 'unknown'}`;
+    }
+    // Prime the auth cache so the next sync skips its own auth.test call.
+    authCache.set(token, {
+      userId: data.user_id,
+      team: data.team ?? 'Slack',
+      cachedAt: Date.now(),
+    });
+    return null;
+  } catch {
+    return 'Could not validate Slack token \u2014 network error';
+  }
+}
+
+/**
  * Fetches high-signal Slack DM data using only the scopes available on the
  * user token: im:read, im:history, mpim:read, mpim:history, users:read.
  *
@@ -66,8 +120,6 @@ interface UsersInfoResponse extends SlackApiResponse {
  */
 export class SlackProvider {
   private readonly token: string;
-  /** userId → "@displayName" cache, lives for one sync call. */
-  private userCache: Map<string, string> = new Map();
 
   constructor(token: string) {
     this.token = token;
@@ -134,27 +186,30 @@ export class SlackProvider {
 
   /**
    * Resolves a Slack user ID to a "@displayName" string.
-   * Results are cached in `userCache` for the lifetime of the sync so that
-   * users.info is never called more than once per user ID per sync.
-   * Falls back to real_name, then to raw user ID if the API call fails.
+   * Results are cached at module scope so users.info is deduplicated across
+   * sync cycles, not just within a single sync. Falls back to real_name, then
+   * to raw user ID if the API call fails.
    *
    * @param userId - Slack user ID, e.g. "U01234567".
    */
   private async resolveUser(userId: string): Promise<string> {
-    const cached = this.userCache.get(userId);
-    if (cached !== undefined) return cached;
+    const cached = userNameCache.get(userId);
+    if (cached && Date.now() - cached.cachedAt < USER_CACHE_TTL_MS) {
+      return cached.name;
+    }
 
     try {
       const data = await this.slackFetch<UsersInfoResponse>('users.info', { user: userId });
       const profile = data.user.profile;
       const name = profile.display_name?.trim() || profile.real_name?.trim() || userId;
       const displayName = `@${name}`;
-      this.userCache.set(userId, displayName);
+      userNameCache.set(userId, { name: displayName, cachedAt: Date.now() });
       return displayName;
     } catch {
       // Non-fatal: fall back to raw user ID rather than aborting the sync.
+      // Cache the fallback briefly too so we don't hammer users.info on a bad ID.
       const fallback = `@${userId}`;
-      this.userCache.set(userId, fallback);
+      userNameCache.set(userId, { name: fallback, cachedAt: Date.now() });
       return fallback;
     }
   }
@@ -181,10 +236,24 @@ export class SlackProvider {
     const dm_awaiting_reply: SlackDM[] = [];
 
     // a. Get the authed user's ID and workspace name. auth.test is Tier 1
-    //    (1 req/min) — call it exactly once here and cache the result.
-    const auth = await this.slackFetch<AuthTestResponse>('auth.test', {}, 'POST');
-    const authedUserId = auth.user_id;
-    const workspaceName = auth.team;
+    //    (1 req/min). Cache the result at module scope keyed by token so it
+    //    persists across SlackProvider instances (one per sync cycle).
+    let authedUserId: string;
+    let workspaceName: string;
+    const cachedAuth = authCache.get(this.token);
+    if (cachedAuth && Date.now() - cachedAuth.cachedAt < AUTH_CACHE_TTL_MS) {
+      authedUserId = cachedAuth.userId;
+      workspaceName = cachedAuth.team;
+    } else {
+      const auth = await this.slackFetch<AuthTestResponse>('auth.test', {}, 'POST');
+      authedUserId = auth.user_id;
+      workspaceName = auth.team ?? 'Slack';
+      authCache.set(this.token, {
+        userId: authedUserId,
+        team: workspaceName,
+        cachedAt: Date.now(),
+      });
+    }
 
     // b. List DM conversations. Limit=20 to cap API usage and snapshot size.
     //    Types im,mpim covers both 1:1 DMs and group DMs.
@@ -219,17 +288,30 @@ export class SlackProvider {
 
         if (!hasUnreadCount && !newerThanRead) continue;
 
-        // Fetch recent history — limit 10 is enough to identify the last
-        // message author and its timestamp. Slack returns newest first.
-        const historyData = await this.slackFetch<ConversationsHistoryResponse>(
-          'conversations.history',
-          { channel: conv.id, limit: '10' },
-        );
+        // Prefer conv.latest from conversations.list — it already has the
+        // fields we need (ts, user/bot_id, text). Only fall back to
+        // conversations.history when latest is missing or incomplete.
+        let lastMsg: SlackMessage | undefined;
+        if (
+          conv.latest &&
+          conv.latest.ts &&
+          (conv.latest.user !== undefined || (conv.latest as SlackMessage).bot_id !== undefined)
+        ) {
+          lastMsg = conv.latest as SlackMessage;
+        } else {
+          const historyData = await this.slackFetch<ConversationsHistoryResponse>(
+            'conversations.history',
+            { channel: conv.id, limit: '1' },
+          );
+          lastMsg = historyData.messages[0];
+        }
 
-        const messages = historyData.messages;
-        if (messages.length === 0) continue;
+        if (!lastMsg) continue;
 
-        const lastMsg = messages[0]; // newest message
+        // Skip bot messages (Slackbot, workflow notifications, app DMs) — they
+        // shouldn't trigger dm_action_required and aren't replies the user owes.
+        if (lastMsg.bot_id) continue;
+
         // Slack timestamps are Unix seconds with microsecond precision as a string.
         const lastMsgMs = parseFloat(lastMsg.ts) * 1000;
         const lastMsgDate = new Date(lastMsgMs).toISOString();

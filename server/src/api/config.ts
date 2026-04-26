@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { validateSlackToken } from '../providers/slack.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = path.resolve(__dirname, '../../../.env');
@@ -52,8 +53,12 @@ export function getConfigStatus(): { present: string[]; missing: string[]; value
 /**
  * Validates format of credentials that are present (non-empty).
  * Does not enforce required fields — allows partial saves from the UI.
+ *
+ * For SLACK_USER_TOKEN, this also performs a live `auth.test` call so that an
+ * invalid token (revoked, wrong scopes, typo) is rejected at save time rather
+ * than silently failing on the next sync cycle.
  */
-export function validatePartialConfig(values: Record<string, string>): string[] {
+export async function validatePartialConfig(values: Record<string, string>): Promise<string[]> {
   const errors: string[] = [];
   if (values.GOOGLE_CLIENT_ID && !values.GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')) {
     errors.push('GOOGLE_CLIENT_ID should end with .apps.googleusercontent.com');
@@ -67,8 +72,13 @@ export function validatePartialConfig(values: Record<string, string>): string[] 
       errors.push('NOTION_DATABASE_ID should be a 32-character hex string');
     }
   }
-  if (values.SLACK_USER_TOKEN && !values.SLACK_USER_TOKEN.startsWith('xoxp-')) {
-    errors.push('SLACK_USER_TOKEN should start with xoxp-');
+  if (values.SLACK_USER_TOKEN) {
+    if (!values.SLACK_USER_TOKEN.startsWith('xoxp-')) {
+      errors.push('SLACK_USER_TOKEN should start with xoxp-');
+    } else {
+      const slackErr = await validateSlackToken(values.SLACK_USER_TOKEN);
+      if (slackErr) errors.push(slackErr);
+    }
   }
   return errors;
 }
