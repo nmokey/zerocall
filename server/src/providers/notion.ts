@@ -13,10 +13,9 @@ export class NotionProvider implements TaskProvider {
   }
 
   async getTasks(): Promise<{ overdue: Task[]; due_today: Task[]; in_progress: Task[] }> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await (this.client as any).search({
-      filter: { value: 'page', property: 'object' },
-      sort: { direction: 'descending', timestamp: 'last_edited_time' },
+    const response = await this.client.dataSources.query({
+      data_source_id: this.databaseId,
+      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
       page_size: 100,
     });
 
