@@ -4,7 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TOKENS_PATH = path.resolve(__dirname, '../../tokens.json');
+const DATA_DIR = process.env.DATA_DIR ?? path.resolve(__dirname, '../../');
+const TOKENS_PATH = path.join(DATA_DIR, 'tokens.json');
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
