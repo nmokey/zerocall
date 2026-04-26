@@ -14,8 +14,8 @@
     "demo:trace": "npm run build:harness && tsx demo/trace.ts",
     "demo:benchmark": "npm run build:harness && tsx demo/benchmark.ts",
     "demo:adaptive": "npm run build:harness && npm run build:server && tsx demo/adaptive-benchmark.ts",
-    "live:trace": "npm run build:harness && npm run build -w server && tsx live/trace.ts",
-    "live:benchmark": "npm run build:harness && npm run build -w server && tsx live/benchmark.ts",
+    "live:trace": "npm run build:harness && npm run build:server && tsx live/trace.ts",
+    "live:benchmark": "npm run build:harness && npm run build:server && tsx live/benchmark.ts",
     "auth:google": "tsx scripts/google-auth.ts"
   },
   "devDependencies": {
