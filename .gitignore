@@ -4,12 +4,8 @@ dist/
 .env.bak
 tokens.json
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
-
-
-zerocall.db
-zerocall.db-shm
-zerocall.db-wal
-tokens.json
 
 secrets/

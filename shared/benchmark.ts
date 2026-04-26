@@ -25,7 +25,7 @@ function rpad(s: string, n: number) {
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-/** Agent function signatures that demo/ and live/ each provide. */
+/** Agent function signatures for benchmark comparison. */
 export interface BenchmarkAgents {
   runWithoutZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
   runWithZeroCall: (client: Anthropic, prompt: string) => Promise<AgentRun>;
