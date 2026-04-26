@@ -11,3 +11,5 @@ onecall.db
 onecall.db-shm
 onecall.db-wal
 tokens.json
+
+secrets/
