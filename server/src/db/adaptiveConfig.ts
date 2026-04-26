@@ -4,9 +4,10 @@ export interface SectionConfig {
   calendar: boolean;
   email: boolean;
   tasks: boolean;
+  slack: boolean;
 }
 
-const SECTIONS: Array<keyof SectionConfig> = ['calendar', 'email', 'tasks'];
+const SECTIONS: Array<keyof SectionConfig> = ['calendar', 'email', 'tasks', 'slack'];
 
 /**
  * Reads the adaptive section config from SQLite.
@@ -18,9 +19,9 @@ export function readAdaptiveConfig(): SectionConfig {
     `SELECT section, enabled FROM adaptive_config`
   ).all() as { section: string; enabled: number }[];
 
-  const config: SectionConfig = { calendar: true, email: true, tasks: true };
+  const config: SectionConfig = { calendar: true, email: true, tasks: true, slack: true };
   for (const row of rows) {
-    if (row.section === 'calendar' || row.section === 'email' || row.section === 'tasks') {
+    if (row.section === 'calendar' || row.section === 'email' || row.section === 'tasks' || row.section === 'slack') {
       config[row.section] = row.enabled === 1;
     }
   }

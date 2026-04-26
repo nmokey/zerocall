@@ -5,6 +5,7 @@ import {
   MOCK_GMAIL_THREADS,
   MOCK_CALENDAR_EVENTS,
   MOCK_NOTION_TASKS,
+  MOCK_SLACK_DATA,
 } from '../data/mock.js';
 
 export type { AgentRun, ToolCallRecord } from '../../shared/types.js';
@@ -58,6 +59,15 @@ const RAW_TOOLS: Tool[] = [
       required: ['database_id'],
     },
   },
+  {
+    name: 'slack_get_messages',
+    description: 'Fetch recent Slack DMs and mentions',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 function handleToolCall(name: string, input: Record<string, unknown>): unknown {
@@ -93,6 +103,9 @@ function handleToolCall(name: string, input: Record<string, unknown>): unknown {
           },
         })),
       };
+
+    case 'slack_get_messages':
+      return MOCK_SLACK_DATA;
 
     default:
       return { error: `Unknown tool: ${name}` };

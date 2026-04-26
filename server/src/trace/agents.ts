@@ -15,6 +15,7 @@ import { getAuthenticatedClient } from '../auth/google.js';
 import { fetchEmailState } from '../providers/gmail.js';
 import { fetchCalendarState } from '../providers/calendar.js';
 import { NotionProvider } from '../providers/notion.js';
+import { SlackProvider } from '../providers/slack.js';
 import { ensureFreshSnapshot } from '../sync/scheduler.js';
 import { logQuery } from '../db/queryLog.js';
 import { readAdaptiveConfig } from '../db/adaptiveConfig.js';
@@ -102,9 +103,14 @@ async function runAgentLoop(
 
 const enableNotion = process.env.ENABLE_NOTION !== 'false';
 
-/** Builds the raw tool definitions for the without-ZeroCall agent, with today's date computed fresh per call. */
+/**
+ * Builds the raw tool definitions for the without-ZeroCall agent.
+ * Today's date and SLACK_USER_TOKEN are read at call time (not module load)
+ * so they always reflect the current environment state.
+ */
 function buildRawTools(): Tool[] {
   const today = todayLocalDate(); // YYYY-MM-DD in user's configured timezone
+  const slackToken = process.env.SLACK_USER_TOKEN;
   return [
     {
       name: 'gmail_search_threads',
@@ -154,6 +160,15 @@ function buildRawTools(): Tool[] {
         required: ['database_id'],
       },
     }] : []),
+    ...(slackToken ? [{
+      name: 'slack_get_messages',
+      description: 'Fetch recent Slack DMs requiring attention (unread DMs and DMs awaiting your reply).',
+      input_schema: {
+        type: 'object' as const,
+        properties: {},
+        required: [],
+      },
+    }] : []),
   ];
 }
 
@@ -182,6 +197,16 @@ export async function runWithoutZeroCall(client: Anthropic, prompt: string, onTo
     return notionTasks;
   }
 
+  // Slack state is cached for the lifetime of this agent run so that multiple
+  // tool calls within one prompt (e.g. a follow-up question) hit the API once.
+  // Token is read here (not at module load) so it reflects the live env state.
+  const slackToken = process.env.SLACK_USER_TOKEN;
+  let slackMessages: Awaited<ReturnType<InstanceType<typeof SlackProvider>['getMessages']>> | null = null;
+  async function getSlackMessages() {
+    if (!slackMessages) slackMessages = await new SlackProvider(slackToken!).getMessages();
+    return slackMessages;
+  }
+
   async function handleToolCall(name: string, input: Record<string, unknown>): Promise<unknown> {
     switch (name) {
       case 'gmail_search_threads': {
@@ -202,6 +227,10 @@ export async function runWithoutZeroCall(client: Anthropic, prompt: string, onTo
         if (!enableNotion) return { error: 'Notion integration is disabled' };
         const tasks = await getNotionTasks();
         return { results: [...tasks.overdue, ...tasks.due_today, ...tasks.in_progress] };
+      }
+      case 'slack_get_messages': {
+        if (!slackToken) return { error: 'Slack integration is not configured' };
+        return getSlackMessages();
       }
       default:
         return { error: `Unknown tool: ${name}` };

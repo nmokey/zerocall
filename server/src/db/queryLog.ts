@@ -1,6 +1,6 @@
 import { getDb } from './client.js';
 
-export type QueryCategory = 'calendar' | 'email' | 'tasks' | 'general';
+export type QueryCategory = 'calendar' | 'email' | 'tasks' | 'slack' | 'general';
 
 export interface QueryLogRow {
   id: number;
@@ -15,6 +15,9 @@ export interface QueryLogRow {
 const CALENDAR_KEYWORDS = ['meeting', 'schedule', 'calendar', 'available', 'busy', 'free block', 'am i free', 'on my calendar', 'event', '3pm', '2pm', '1pm', 'noon', 'rest of the day', 'this afternoon', 'free at'];
 const EMAIL_KEYWORDS = ['email', 'reply', 'replied', 'message', 'inbox', 'waiting', 'sent', 'thread', 'responded', 'hear back', 'follow up', 'unread'];
 const TASKS_KEYWORDS = ['task', 'todo', 'overdue', 'deadline', 'due today', 'in progress', 'blocking', 'notion', 'finish', 'deliverable', 'submission'];
+// 'messaged me' / 'pinged me' / 'slacked me' are strong Slack signals with no
+// cross-section ambiguity. Temporal words deliberately excluded (see above).
+const SLACK_KEYWORDS = ['slack', 'dm', 'direct message', 'slacked', 'pinged me', 'messaged me'];
 
 /**
  * Classifies a query into a section category using keyword heuristics.
@@ -34,6 +37,7 @@ export function classifyQuery(text: string): QueryCategory {
     calendar: score(CALENDAR_KEYWORDS),
     email: score(EMAIL_KEYWORDS),
     tasks: score(TASKS_KEYWORDS),
+    slack: score(SLACK_KEYWORDS),
     general: 0,
   };
 

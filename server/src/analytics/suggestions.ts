@@ -33,6 +33,7 @@ const CATEGORY_SIGNALS: Partial<Record<string, keyof SectionConfig>> = {
   calendar: 'calendar',
   email: 'email',
   tasks: 'tasks',
+  slack: 'slack',
   // 'general' intentionally absent
 };
 
@@ -65,6 +66,14 @@ function estimateSectionTokens(snapshot: WorkStateSnapshot, section: keyof Secti
       chars += t.title.length + 20;
     }
     chars += 80; // section headers
+  } else if (section === 'slack' && snapshot.slack) {
+    for (const dm of snapshot.slack.dm_action_required) {
+      chars += dm.counterparty.length + dm.snippet.length + 10;
+    }
+    for (const dm of snapshot.slack.dm_awaiting_reply) {
+      chars += dm.counterparty.length + dm.snippet.length + 20;
+    }
+    chars += 60; // section headers
   }
 
   return Math.round(chars / 4);
@@ -82,7 +91,7 @@ export function computeAdaptiveStats(): AdaptiveStats {
   const snapshot = readLatestSnapshot();
 
   const categoryDistribution: Record<string, number> = {
-    calendar: 0, email: 0, tasks: 0, general: 0,
+    calendar: 0, email: 0, tasks: 0, slack: 0, general: 0,
   };
 
   for (const q of queries) {
@@ -98,9 +107,9 @@ export function computeAdaptiveStats(): AdaptiveStats {
 
   // For each section, relevance = fraction of specific queries that signal it.
   // Defaults to 1 (fully relevant) when there's no specific signal data yet.
-  const sectionRelevance: Record<string, number> = { calendar: 1, email: 1, tasks: 1 };
+  const sectionRelevance: Record<string, number> = { calendar: 1, email: 1, tasks: 1, slack: 1 };
   if (specificTotal > 0) {
-    for (const section of ['calendar', 'email', 'tasks'] as Array<keyof SectionConfig>) {
+    for (const section of ['calendar', 'email', 'tasks', 'slack'] as Array<keyof SectionConfig>) {
       const needed = specificQueries.filter(q => CATEGORY_SIGNALS[q.category] === section).length;
       sectionRelevance[section] = needed / specificTotal;
     }
@@ -109,7 +118,7 @@ export function computeAdaptiveStats(): AdaptiveStats {
   const suggestions: AdaptiveSuggestion[] = [];
 
   if (total >= MIN_QUERIES_FOR_SUGGESTION && specificTotal >= MIN_QUERIES_FOR_SUGGESTION) {
-    for (const section of ['calendar', 'email', 'tasks'] as Array<keyof SectionConfig>) {
+    for (const section of ['calendar', 'email', 'tasks', 'slack'] as Array<keyof SectionConfig>) {
       // Only suggest disabling sections that are currently enabled
       if (!currentConfig[section]) continue;
 

@@ -1,5 +1,43 @@
 import type { WorkStateSnapshot } from '@zerocall/harness';
 
+/**
+ * Mock Slack DM data matching the SlackProvider.getMessages() return shape.
+ * Follows the UCLA research student persona (Arvind, Sarah, Marcus) used
+ * throughout the rest of the mock dataset.
+ */
+export const MOCK_SLACK_DATA = {
+  dms: {
+    workspace_name: 'UCLA CS Research',
+    dm_action_required: [
+      {
+        channel_id: 'D01ARVIND',
+        channel_name: 'arvind-ryan',
+        counterparty: '@Arvind Kumar',
+        last_message_at: '2026-04-24T10:32:00Z',
+        snippet: 'Ryan, can you push the latest eval results to the shared drive before our 4pm sync? I want to review before the meeting.',
+      },
+      {
+        channel_id: 'D01SARAH',
+        channel_name: 'sarah-ryan',
+        counterparty: '@Sarah Chen',
+        last_message_at: '2026-04-24T09:15:00Z',
+        snippet: 'Hey! I added my lit review sections to the Notion doc. Can you take a look and leave comments when you get a chance?',
+      },
+    ],
+    dm_awaiting_reply: [
+      {
+        channel_id: 'D01MARCUS',
+        channel_name: 'marcus-ryan',
+        counterparty: '@Marcus Lee',
+        last_message_at: '2026-04-23T14:00:00Z',
+        snippet: 'Hey Marcus, did you end up getting access to the A100 cluster? I submitted my request at the same time and still haven\'t heard back.',
+        waiting_since: '2026-04-23T14:00:00Z',
+      },
+    ],
+  },
+  errors: [] as string[],
+};
+
 export const MOCK_SNAPSHOT: WorkStateSnapshot = {
   as_of: '2026-04-24T09:00:00Z',
 
@@ -146,9 +184,11 @@ export const MOCK_SNAPSHOT: WorkStateSnapshot = {
     ],
   },
 
+  slack: MOCK_SLACK_DATA.dms,
+
   meta: {
     sync_duration_ms: 1840,
-    sources: ['gmail', 'gcal', 'notion'],
+    sources: ['gmail', 'gcal', 'notion', 'slack'],
     errors: [],
   },
 };
