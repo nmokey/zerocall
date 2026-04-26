@@ -1,6 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { WorkStateSnapshot } from './types.js';
 
+export interface SectionConfig {
+  calendar: boolean;
+  email: boolean;
+  tasks: boolean;
+}
+
 /**
  * OneCallAnthropic subclasses the Anthropic SDK client and overrides the
  * `prepareOptions` lifecycle hook to automatically inject the current
@@ -14,18 +20,28 @@ import type { WorkStateSnapshot } from './types.js';
  *   snapshot. May return synchronously or as a Promise.
  *   Use `() => MOCK_SNAPSHOT` for demo/testing, or an async function
  *   like `ensureFreshSnapshot` for live use with lazy caching.
+ * @param configGetter - Optional. Returns which snapshot sections are enabled.
+ *   Defaults to all sections enabled if not provided.
+ * @param queryLogger - Optional. Called with (queryText, category) after
+ *   classifying the user's prompt. Used by live agents to persist query history.
  */
 export class OneCallAnthropic extends Anthropic {
   private readonly snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
+  private readonly configGetter?: () => SectionConfig | null;
+  private readonly queryLogger?: (queryText: string) => void;
 
   constructor(
     opts: ConstructorParameters<typeof Anthropic>[0] & {
       snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
+      configGetter?: () => SectionConfig | null;
+      queryLogger?: (queryText: string) => void;
     }
   ) {
-    const { snapshotGetter, ...anthropicOpts } = opts;
+    const { snapshotGetter, configGetter, queryLogger, ...anthropicOpts } = opts;
     super(anthropicOpts);
     this.snapshotGetter = snapshotGetter;
+    this.configGetter = configGetter;
+    this.queryLogger = queryLogger;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,110 +59,174 @@ export class OneCallAnthropic extends Anthropic {
     const existing = body.system;
     if (existing !== undefined && typeof existing !== 'string') return;
 
-    body.system = injectSnapshot(existing, snapshot);
+    // Log the user query if a logger is wired in
+    if (this.queryLogger) {
+      const userText = extractUserText(body.messages);
+      if (userText) this.queryLogger(userText);
+    }
+
+    const config = this.configGetter?.() ?? { calendar: true, email: true, tasks: true };
+    const filtered = filterSnapshot(snapshot, config);
+    body.system = injectSnapshot(existing, filtered, config);
   }
 }
 
 /**
+ * Extracts the text content of the last user message from a messages array.
+ * Used to log the prompt for adaptive pattern analysis.
+ */
+function extractUserText(messages: unknown): string | null {
+  if (!Array.isArray(messages) || messages.length === 0) return null;
+  const last = messages[messages.length - 1];
+  if (!last || typeof last !== 'object') return null;
+  const msg = last as Record<string, unknown>;
+  if (msg.role !== 'user') return null;
+  if (typeof msg.content === 'string') return msg.content;
+  if (Array.isArray(msg.content)) {
+    const textBlock = msg.content.find(
+      (b): b is { type: 'text'; text: string } =>
+        typeof b === 'object' && b !== null && (b as Record<string, unknown>).type === 'text'
+    );
+    return textBlock?.text ?? null;
+  }
+  return null;
+}
+
+/**
+ * Returns a copy of the snapshot with disabled sections zeroed out.
+ * The type stays stable — formatSnapshot handles empty arrays gracefully.
+ *
+ * @param s - Original snapshot.
+ * @param config - Which sections are enabled.
+ */
+function filterSnapshot(s: WorkStateSnapshot, config: SectionConfig): WorkStateSnapshot {
+  return {
+    ...s,
+    calendar: config.calendar
+      ? s.calendar
+      : { today: [], free_blocks: [], upcoming_deadlines: [] },
+    email: config.email
+      ? s.email
+      : { action_required: [], awaiting_reply: [], unread_count: 0 },
+    tasks: config.tasks
+      ? s.tasks
+      : { overdue: [], due_today: [], in_progress: [] },
+  };
+}
+
+/**
  * Prepends (or creates) the OneCall context block in the system prompt.
+ * Sections that are disabled in config are suppressed entirely (no header).
  *
  * @param existing - The caller's system prompt, or undefined.
- * @param snapshot - The WorkStateSnapshot to format and inject.
+ * @param snapshot - The (already filtered) WorkStateSnapshot to format.
+ * @param config - Which sections are enabled, used to suppress headers.
  */
-function injectSnapshot(existing: string | undefined, snapshot: WorkStateSnapshot): string {
-  const block = formatSnapshot(snapshot);
+function injectSnapshot(
+  existing: string | undefined,
+  snapshot: WorkStateSnapshot,
+  config: SectionConfig,
+): string {
+  const block = formatSnapshot(snapshot, config);
   return existing ? `${existing}\n\n${block}` : block;
 }
 
 /**
  * Renders a WorkStateSnapshot as a compact, structured plain-text block.
  * Plain text is more token-efficient than JSON and reads well in demo output.
+ * Sections disabled in config are omitted entirely.
  *
  * @param s - The snapshot to format.
+ * @param config - Which sections to include.
  */
-function formatSnapshot(s: WorkStateSnapshot): string {
+function formatSnapshot(s: WorkStateSnapshot, config: SectionConfig): string {
   const lines: string[] = [];
 
   lines.push(`--- ONECALL WORK CONTEXT (as of ${s.as_of}) ---`);
 
-  lines.push('\n[CALENDAR TODAY]');
-  if (s.calendar.today.length === 0) {
-    lines.push('  (no events)');
-  } else {
-    for (const evt of s.calendar.today) {
-      const start = fmtTime(evt.start);
-      const end = fmtTime(evt.end);
-      const location = evt.location ? `  (${evt.location})` : '';
-      const link = evt.meeting_link ? `  ${evt.meeting_link}` : '';
-      lines.push(`  • ${start}–${end}  ${evt.title}${location}${link}`);
+  if (config.calendar) {
+    lines.push('\n[CALENDAR TODAY]');
+    if (s.calendar.today.length === 0) {
+      lines.push('  (no events)');
+    } else {
+      for (const evt of s.calendar.today) {
+        const start = fmtTime(evt.start);
+        const end = fmtTime(evt.end);
+        const location = evt.location ? `  (${evt.location})` : '';
+        const link = evt.meeting_link ? `  ${evt.meeting_link}` : '';
+        lines.push(`  • ${start}–${end}  ${evt.title}${location}${link}`);
+      }
+    }
+
+    lines.push('\n[FREE BLOCKS TODAY]');
+    if (s.calendar.free_blocks.length === 0) {
+      lines.push('  (none)');
+    } else {
+      const blocks = s.calendar.free_blocks
+        .map(b => `${fmtTime(b.start)}–${fmtTime(b.end)} (${b.duration_minutes} min)`)
+        .join(', ');
+      lines.push(`  ${blocks}`);
+    }
+
+    lines.push('\n[UPCOMING DEADLINES]');
+    if (s.calendar.upcoming_deadlines.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const evt of s.calendar.upcoming_deadlines) {
+        lines.push(`  • ${fmtDate(evt.start)}  ${evt.title}`);
+      }
     }
   }
 
-  lines.push('\n[FREE BLOCKS TODAY]');
-  if (s.calendar.free_blocks.length === 0) {
-    lines.push('  (none)');
-  } else {
-    const blocks = s.calendar.free_blocks
-      .map(b => `${fmtTime(b.start)}–${fmtTime(b.end)} (${b.duration_minutes} min)`)
-      .join(', ');
-    lines.push(`  ${blocks}`);
-  }
-
-  lines.push('\n[UPCOMING DEADLINES]');
-  if (s.calendar.upcoming_deadlines.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const evt of s.calendar.upcoming_deadlines) {
-      lines.push(`  • ${fmtDate(evt.start)}  ${evt.title}`);
+  if (config.email) {
+    lines.push('\n[EMAIL — ACTION REQUIRED]');
+    if (s.email.action_required.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const t of s.email.action_required) {
+        lines.push(`  • ${t.counterparty}: "${t.subject}" — ${t.snippet.slice(0, 120)}`);
+      }
     }
-  }
 
-  lines.push('\n[EMAIL — ACTION REQUIRED]');
-  if (s.email.action_required.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const t of s.email.action_required) {
-      lines.push(`  • ${t.counterparty}: "${t.subject}" — ${t.snippet.slice(0, 120)}`);
+    lines.push('\n[EMAIL — AWAITING REPLY]');
+    if (s.email.awaiting_reply.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const t of s.email.awaiting_reply) {
+        const since = t.waiting_since ? ` (waiting since ${fmtDate(t.waiting_since)})` : '';
+        lines.push(`  • ${t.counterparty}${since}: "${t.subject}"`);
+      }
     }
+    lines.push(`  Total unread: ${s.email.unread_count}`);
   }
 
-  lines.push('\n[EMAIL — AWAITING REPLY]');
-  if (s.email.awaiting_reply.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const t of s.email.awaiting_reply) {
-      const since = t.waiting_since ? ` (waiting since ${fmtDate(t.waiting_since)})` : '';
-      lines.push(`  • ${t.counterparty}${since}: "${t.subject}"`);
+  if (config.tasks) {
+    lines.push('\n[TASKS — OVERDUE]');
+    if (s.tasks.overdue.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const t of s.tasks.overdue) {
+        const due = t.due ? ` (due ${fmtDate(t.due)})` : '';
+        lines.push(`  • ${t.title}${due}`);
+      }
     }
-  }
 
-  lines.push(`  Total unread: ${s.email.unread_count}`);
-
-  lines.push('\n[TASKS — OVERDUE]');
-  if (s.tasks.overdue.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const t of s.tasks.overdue) {
-      const due = t.due ? ` (due ${fmtDate(t.due)})` : '';
-      lines.push(`  • ${t.title}${due}`);
+    lines.push('\n[TASKS — DUE TODAY]');
+    if (s.tasks.due_today.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const t of s.tasks.due_today) {
+        lines.push(`  • ${t.title}`);
+      }
     }
-  }
 
-  lines.push('\n[TASKS — DUE TODAY]');
-  if (s.tasks.due_today.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const t of s.tasks.due_today) {
-      lines.push(`  • ${t.title}`);
-    }
-  }
-
-  lines.push('\n[TASKS — IN PROGRESS]');
-  if (s.tasks.in_progress.length === 0) {
-    lines.push('  (none)');
-  } else {
-    for (const t of s.tasks.in_progress) {
-      lines.push(`  • ${t.title}`);
+    lines.push('\n[TASKS — IN PROGRESS]');
+    if (s.tasks.in_progress.length === 0) {
+      lines.push('  (none)');
+    } else {
+      for (const t of s.tasks.in_progress) {
+        lines.push(`  • ${t.title}`);
+      }
     }
   }
 

@@ -17,5 +17,18 @@ export function initSchema(): void {
       success     INTEGER,
       error       TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS query_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      logged_at   TEXT NOT NULL,
+      query_text  TEXT NOT NULL,
+      category    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS adaptive_config (
+      section     TEXT PRIMARY KEY,
+      enabled     INTEGER NOT NULL DEFAULT 1,
+      updated_at  TEXT NOT NULL
+    );
   `);
 }

@@ -21,18 +21,20 @@ OneCall is an **agent harness** that intercepts every outgoing LLM request and i
 
 ## How It Works
 
-1. **Background sync** — polls Gmail, Google Calendar, and Notion via REST APIs (no LLM involved), distills results into a `WorkStateSnapshot`, and persists to SQLite. Uses lazy caching: syncs only fire when the snapshot is requested and the cache is stale (>15 min).
+### Layer 1: Background sync
 
-2. **Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK and overrides `prepareOptions()`. On every `messages.create()` call, it reads the latest snapshot (sub-millisecond) and splices it into the system prompt. The calling code passes no tools and no system prompt; injection is invisible.
+Polls Gmail, Google Calendar, and Notion via REST APIs (no LLM involved), distills results into a `WorkStateSnapshot`, and persists to SQLite. Uses lazy caching: syncs only fire when the snapshot is requested and the cache is stale (>15 min).
 
-3. **Setup page** — a lightweight server-rendered HTML page at `http://localhost:3000/setup` handles credential entry (Google OAuth, Notion token) and shows sync status.
+### Layer 2: Harness injection
+
+`OneCallAnthropic` subclasses the Anthropic SDK and overrides `prepareOptions()`. On every `messages.create()` call, it reads the latest snapshot (sub-millisecond), filters it by the adaptive section config, and splices it into the system prompt. The calling code passes no tools and no system prompt; injection is invisible.
 
 ```typescript
 import { OneCallAnthropic } from '@onecall/harness';
 
 const client = new OneCallAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
-  snapshotGetter: readLatestSnapshot, // or () => MOCK_SNAPSHOT for demo
+  snapshotGetter: readLatestSnapshot,
 });
 
 const response = await client.messages.create({
@@ -41,6 +43,16 @@ const response = await client.messages.create({
   messages: [{ role: 'user', content: 'What should I focus on right now?' }],
 });
 ```
+
+### Layer 3: Adaptive System Prompt Manager
+
+OneCall observes your query patterns and learns which snapshot sections you actually need. After enough queries, it surfaces suggestions like "you almost never ask about email — disable that section and save ~180 tokens per query." One click applies the optimization; the next request gets a leaner system prompt with no behavior change for the sections that matter.
+
+Classification is purely lexical — no extra LLM call. The suggestion engine computes per-section relevance from your query history and flags sections below 15% relevance.
+
+### Layer 4: React dashboard
+
+The server serves a Vite + React frontend at `http://localhost:3000`. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts the Adaptive Optimization panel with one-click apply.
 
 ---
 
@@ -61,7 +73,7 @@ npm start
 
 ### 3. Configure credentials
 
-Open `http://localhost:3000/setup` in your browser. Enter credentials section by section — each saves independently.
+Open `http://localhost:3000` in your browser. Enter credentials section by section — each saves independently.
 
 | Credential | Where to get it |
 |---|---|
@@ -72,9 +84,22 @@ Open `http://localhost:3000/setup` in your browser. Enter credentials section by
 
 ### 4. Connect Google
 
-On the setup page, click **Connect Google Account** after saving your Google credentials. After approving the OAuth consent screen, tokens are saved automatically.
+On the setup page, click **Connect Google Account**. After approving the OAuth consent screen, tokens are saved to `server/tokens.json`.
 
-CLI alternative: `npm run auth:google`
+If the browser OAuth flow doesn't work, use the CLI alternative:
+
+```bash
+npm run auth:google
+```
+
+---
+
+## Development
+
+```bash
+npm run dev        # server in watch/reload mode
+npm run dev:web    # Vite dev server with HMR (proxies /api/* to port 3000)
+```
 
 ---
 
@@ -97,22 +122,63 @@ npm run demo:trace                                       # default prompt
 npm run demo:trace -- p04                                # by prompt ID
 npm run demo:trace -- --prompt "Am I free at 3pm?"       # custom prompt
 npm run demo:benchmark                                   # all 20 prompts
+npm run demo:adaptive                                    # adaptive optimization demo
 ```
 
-The `live/` directory runs the same scripts against **real APIs** (requires credentials + `npm start` first).
+Sample benchmark output:
+
+```
+WITHOUT OneCall  (raw tool calls)
+  1. gmail_search_threads  1ms
+  2. calendar_list_events  0ms
+  3. gmail_get_thread       0ms
+  4. notion_query_database  0ms
+
+  Total: 19424ms   Tokens: 7152   Tool calls: 5   LLM turns: 3
+
+WITH OneCall  (harness injection)
+  ✦ Work context auto-injected into system prompt
+  (0 tool calls — harness injected the snapshot before first token)
+
+  Total: 6318ms   Tokens: 872   Tool calls: 0   LLM turns: 1
+
+  Tool calls:  5 → 0  (100% fewer)
+  LLM turns:   3 → 1  (67% fewer)
+  Latency:     19424ms → 6318ms  (67% faster)
+  Tokens:      7152 → 872  (88% fewer)
+```
+
+### Adaptive demo (`demo:adaptive`)
+
+Runs 15 prompts (calendar/task-heavy) through OneCall twice:
+
+1. **Phase 1** — all sections enabled; queries are classified and logged in memory
+2. **Analysis** — computes per-section relevance from specific-category queries only; suggests disabling email (8% relevance, below the 15% threshold)
+3. **Phase 2** — same prompts with email section disabled; tokens drop
+
+```
+ADAPTIVE OPTIMIZATION RESULTS
+  Disabled sections:     email (relevance < 15%)
+  Avg tokens — Phase 1:  ~900 tokens/query  (all sections)
+  Avg tokens — Phase 2:  ~720 tokens/query  (optimized)
+  Token reduction:        ~20%
+  The system learned your workflow. Same answers, 20% leaner.
+```
+
+---
+
+## Live Evaluation
+
+The `live/` directory runs the same trace and benchmark against your **real** Gmail, Google Calendar, and Notion data.
+
+**Prerequisites:** credentials configured, `npm start` run at least once so the SQLite snapshot is populated.
 
 ```bash
 npm run live:trace -- --prompt "What should I focus on today?"
 npm run live:benchmark
 ```
 
----
-
-## Development
-
-```bash
-npm run dev    # server in watch mode
-```
+The `without` agent makes live API calls on each run. The `with` agent reads from the local snapshot (sub-millisecond). Live queries are also logged to the `query_log` table, which feeds the Adaptive Optimization panel in the dashboard.
 
 ---
 

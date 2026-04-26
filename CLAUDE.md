@@ -13,7 +13,7 @@ You are a senior TypeScript engineer working on **OneCall**, a hackathon project
 
 2. **Cognition — "Augment the Agent" (company track)** — AI agents are getting powerful but still hit real limits. Build a tool, integration, or product that makes AI agents measurably more capable, or removes the friction and toil they can't yet handle on their own. Cognition is specifically looking for: better verification for AI outputs, smarter context retrieval, agent integrations & extensions, human–AI collaboration tooling, eliminating professional toil. They want something a real team would actually use — practical, high-impact, grounded in real workflows.
 
-**Judging criteria lens:** Judges want a clear before/after story with a measurable metric. Ours is: *100% reduction in tool calls, ~67% reduction in LLM turns, ~67% faster response time.*
+**Judging criteria lens:** Judges want a clear before/after story with a measurable metric. Ours is: *100% reduction in tool calls, ~51% reduction in LLM turns, ~47% faster response time, ~89% fewer tokens.*
 
 ---
 
@@ -32,21 +32,26 @@ An agent harness that intercepts every outgoing LLM request and injects a pre-sy
 **The key insight (from Cognition feedback):**
 Traditional approaches expose work context through tools that the model must decide to call — that's just a better tool, not a paradigm shift. OneCall injects context at the harness level: `OneCallAnthropic` overrides `prepareOptions()` in the Anthropic SDK and splices the snapshot into every `system` prompt automatically. The model never needs to ask for it.
 
+**Second insight (Cognition follow-up feedback — Adaptive System Prompt Manager):**
+Pre-deciding what data to inject means injecting things users don't need. OneCall now observes query patterns over time and learns which snapshot sections a given user actually asks about. Sections with low relevance (<15%) are surfaced as disable suggestions in the dashboard with projected token savings. One click applies the config; future requests inject only the sections that matter.
+
 ---
 
 ## Technical Architecture
 
 ### Overview
 
-OneCall has three layers:
+OneCall has four layers:
 
 **Layer 1: Background sync** — Polls Gmail, Google Calendar, and Notion via REST APIs, distills raw responses into a clean `WorkStateSnapshot`, and persists it to a local SQLite database. Uses lazy caching: syncs only fire when a snapshot is requested and the cache is stale (>15 min default).
 
-**Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond) and injects it into `options.body.system` as a structured plain-text block.
+**Layer 2: Harness injection** — `OneCallAnthropic` subclasses the Anthropic SDK `Anthropic` class and overrides the `prepareOptions(options)` lifecycle hook. This hook fires before every request is sent, while `options.body` is still a plain JS object (not yet JSON-encoded). The override reads the latest snapshot from SQLite (sub-millisecond), filters it by the adaptive section config, and injects it into `options.body.system` as a structured plain-text block.
 
-**Layer 3: HTTP API + setup page** — An Express server exposes a REST API on port 3000 and serves a server-rendered HTML setup page at `/setup`. The setup page handles first-run credential entry (Google OAuth, Notion token) and shows sync status. No separate frontend build needed.
+**Layer 3: Adaptive System Prompt Manager** — Every query through `OneCallAnthropic` is optionally logged (via `queryLogger` callback) and classified into `calendar | email | tasks | general` using keyword heuristics. The `computeAdaptiveStats()` function computes per-section relevance from specific-category queries only (`general` is excluded from the denominator so it doesn't inflate scores). Sections below 15% relevance are surfaced as suggestions. `setAdaptiveSection()` writes the config to SQLite; `readAdaptiveConfig()` is called on every request to filter the snapshot before formatting.
 
-State delivery is exclusively through harness injection.
+**Layer 4: HTTP API + React dashboard** — An Express server runs on port 3000 and serves the Vite + React frontend from `web/dist/`. The dashboard handles first-run setup (credential entry + Google OAuth), shows snapshot and sync status, a live Trace panel (POST /api/trace), and the Adaptive Optimization card.
+
+State delivery is exclusively through harness injection — never tool calls.
 
 ---
 
@@ -57,17 +62,18 @@ onecall/
 ├── harness/                   # @onecall/harness — SDK subclass + shared types
 │   ├── src/
 │   │   ├── index.ts           # Package entry point (re-exports)
-│   │   ├── client.ts          # OneCallAnthropic — prepareOptions injection
+│   │   ├── client.ts          # OneCallAnthropic — prepareOptions, filterSnapshot, formatSnapshot
 │   │   └── types.ts           # WorkStateSnapshot and all sub-interfaces
 │   ├── package.json
 │   └── tsconfig.json
 ├── server/                    # Background sync server + Express API
 │   ├── src/
 │   │   ├── main.ts            # Entrypoint: initSchema + HTTP server
+│   │   ├── env.ts             # Loads .env relative to server root
 │   │   ├── api/
-│   │   │   ├── server.ts      # Express HTTP server — /setup, /api/*, /oauth2callback
+│   │   │   ├── server.ts      # Express HTTP server — all /api/* routes + SPA fallback
 │   │   │   ├── config.ts      # Credential validation + .env writing
-│   │   │   └── setup.ts       # Server-rendered HTML setup page + POST handler
+│   │   │   └── setup.ts       # (legacy) server-rendered HTML setup page
 │   │   ├── sync/
 │   │   │   ├── scheduler.ts   # Lazy cache: ensureFreshSnapshot()
 │   │   │   ├── syncAll.ts     # Orchestrates a full sync across all providers
@@ -80,36 +86,55 @@ onecall/
 │   │   ├── db/
 │   │   │   ├── client.ts      # better-sqlite3 singleton
 │   │   │   ├── schema.ts      # Table definitions + migrations
-│   │   │   └── snapshot.ts    # Read/write WorkStateSnapshot + sync log
+│   │   │   ├── snapshot.ts    # Read/write WorkStateSnapshot + sync log
+│   │   │   ├── queryLog.ts    # logQuery(), classifyQuery(), readRecentQueries()
+│   │   │   └── adaptiveConfig.ts  # readAdaptiveConfig(), setAdaptiveSection()
+│   │   ├── analytics/
+│   │   │   └── suggestions.ts # computeAdaptiveStats() — relevance scoring + suggestions
+│   │   ├── trace/
+│   │   │   ├── agents.ts      # runWithoutOneCall + runWithOneCall (live API calls)
+│   │   │   └── runner.ts      # runTraceComparison() → TraceResult for /api/trace
 │   │   └── auth/
 │   │       └── google.ts      # OAuth2: getOAuthUrl, exchangeCodeForTokens, getAuthenticatedClient
 │   ├── package.json
 │   └── tsconfig.json
-├── shared/                    # Shared evaluation logic used by demo/ and live/
-│   ├── prompts.ts             # 20 representative productivity prompts
-│   ├── trace.ts               # Color-coded side-by-side trace runner
-│   ├── benchmark.ts           # 20-prompt metrics table runner
-│   ├── agentLoop.ts           # Generic agentic loop (without-agent)
-│   ├── runWith.ts             # Generic with-agent runner (uses OneCallAnthropic)
-│   └── types.ts               # AgentRun + ToolCallRecord types
+├── web/                       # Vite + React frontend
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx            # Checks /api/status → routes to Setup or Trace page
+│   │   ├── api.ts             # Typed fetch wrappers for all /api/* endpoints
+│   │   └── pages/
+│   │       ├── Setup.tsx      # Credential entry + Google OAuth connect
+│   │       └── Trace.tsx      # Side-by-side live trace runner
+│   ├── vite.config.ts         # Dev proxy: /api/* and /oauth2callback → localhost:3000
+│   ├── index.html
+│   ├── package.json
+│   └── tsconfig.json
 ├── demo/
 │   ├── data/mock.ts           # Static WorkStateSnapshot + raw provider slices
 │   ├── agents/
-│   │   ├── without.ts         # Multi-turn agent with raw Gmail/Calendar/Notion tools
-│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (0 tools)
-│   ├── trace.ts               # Thin wrapper → shared/trace.ts
-│   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
-├── live/                      # Live-data evaluation (requires server + credentials)
+│   │   ├── without.ts         # Multi-turn agent with raw Gmail/Calendar/Notion tools (mock)
+│   │   └── with.ts            # Single-turn agent using OneCallAnthropic (mock snapshot)
+│   ├── adaptive-benchmark.ts  # Two-phase adaptive demo: log → analyze → optimize
+│   ├── trace.ts               # Single-prompt color-coded side-by-side trace
+│   └── benchmark.ts           # Sequential 20-prompt run → metrics table + summary
+├── live/                      # Live-data evaluation scripts
 │   ├── agents/
-│   │   ├── without.ts         # Multi-turn agent with real API calls
-│   │   └── with.ts            # Single-turn agent reading live SQLite snapshot
+│   │   └── with.ts            # Re-exports runWithOneCall from server/src/trace/agents
 │   ├── trace.ts               # Thin wrapper → shared/trace.ts
 │   └── benchmark.ts           # Thin wrapper → shared/benchmark.ts
-├── wiki/                      # Project documentation
+├── shared/                    # Logic shared between demo/ and live/
+│   ├── trace.ts               # Color-coded terminal trace runner
+│   ├── benchmark.ts           # 20-prompt metrics table runner
+│   ├── agentLoop.ts           # Generic agentic tool-use loop
+│   ├── runWith.ts             # createRunWithOneCall() — accepts queryLogger + configGetter
+│   ├── prompts.ts             # 20 representative productivity prompts
+│   └── types.ts               # AgentRun + ToolCallRecord types
+├── scripts/
+│   └── google-auth.ts         # CLI OAuth flow for terminal-only environments
+├── .env                       # Credentials (gitignored)
 ├── .env.example
-├── .gitignore
-├── package.json               # Workspace root
-├── README.md
+├── package.json               # Workspace root — orchestration scripts only
 └── CLAUDE.md                  # this file
 ```
 
@@ -123,21 +148,81 @@ The centrepiece of the project. `OneCallAnthropic` extends the Anthropic SDK cli
 export class OneCallAnthropic extends Anthropic {
   constructor(opts: ConstructorParameters<typeof Anthropic>[0] & {
     snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>;
+    configGetter?: () => SectionConfig | null;   // adaptive section enable flags
+    queryLogger?: (queryText: string) => void;   // optional query logging callback
   }) { ... }
 
   protected override async prepareOptions(options: any): Promise<void> {
-    // Fires before every request, while options.body is still a plain JS object.
-    // Scoped to POST /v1/messages only.
-    // Injects the snapshot into options.body.system.
+    // Fires before every POST /v1/messages request.
+    // 1. Extracts the last user message text and calls queryLogger (if provided).
+    // 2. Reads the snapshot via snapshotGetter.
+    // 3. Filters snapshot by configGetter (defaults all sections enabled).
+    // 4. Formats and injects into options.body.system.
   }
 }
 ```
 
-The `snapshotGetter` parameter is injected at construction time:
-- **Demo/test:** `snapshotGetter: () => MOCK_SNAPSHOT`
-- **Production:** `snapshotGetter: ensureFreshSnapshot` (from `server/src/sync/scheduler.ts`) — triggers a sync if the cached snapshot is stale
+Key internal functions in `client.ts`:
+- `filterSnapshot(snapshot, config)` — zeroes out disabled sections while keeping the type stable
+- `formatSnapshot(snapshot, config)` — renders enabled sections as plain text; omits headers for disabled sections entirely
 
-`formatSnapshot()` renders the `WorkStateSnapshot` as structured plain text — more token-efficient than JSON and readable in demo terminal output.
+The `snapshotGetter` parameter:
+- **Demo/test:** `snapshotGetter: () => MOCK_SNAPSHOT`
+- **Live/production:** `snapshotGetter: () => ensureFreshSnapshot()` (lazy cache in `scheduler.ts`)
+
+The `configGetter` parameter:
+- **Demo/test:** omitted (defaults all sections to `true`)
+- **Live/production:** `configGetter: readAdaptiveConfig` (reads from SQLite `adaptive_config` table)
+
+The `queryLogger` parameter:
+- **Demo/test:** omitted (no logging)
+- **Live/production:** `queryLogger: logQuery` (writes to SQLite `query_log` table with classification)
+
+---
+
+### Adaptive System Prompt Manager
+
+#### Query Classification (`server/src/db/queryLog.ts`)
+
+`classifyQuery(text)` uses keyword heuristics to classify each query into one of four categories. Important design decisions:
+
+- Keywords are **strong-signal only** — temporal words like "today", "morning", "standup" are excluded because they appear in queries about any section and would inflate calendar scores
+- **Ties resolve to `general`** — if two categories score equally, the query is ambiguous and should not influence section relevance
+- **Zero score → `general`** — if no keywords match, the query is not domain-specific
+
+```typescript
+const CALENDAR_KEYWORDS = ['meeting', 'schedule', 'calendar', 'am i free', 'free at', 'free block', ...];
+const EMAIL_KEYWORDS    = ['email', 'reply', 'replied', 'inbox', 'unread', 'hear back', ...];
+const TASKS_KEYWORDS    = ['task', 'todo', 'overdue', 'due today', 'in progress', 'blocking', ...];
+// 'general' has no keywords — it's the default for ambiguous queries
+```
+
+#### Section Relevance Scoring (`server/src/analytics/suggestions.ts`)
+
+`computeAdaptiveStats()` computes relevance from the last 100 logged queries:
+
+- **Only specific queries (calendar/email/tasks) contribute to relevance scores.** `general` queries are excluded from both the numerator and denominator. This is critical: without this, "What should I focus on?" and "Give me a standup summary" would inflate every section's score, preventing any suggestion from ever firing.
+- Relevance = (specific queries needing this section) / (total specific queries)
+- Suggestion fires when: `relevance < 0.15` AND `specificTotal >= 5` AND `total >= 5`
+
+#### Database Tables
+
+```sql
+CREATE TABLE IF NOT EXISTS query_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  logged_at   TEXT NOT NULL,
+  query_text  TEXT NOT NULL,
+  category    TEXT NOT NULL  -- 'calendar' | 'email' | 'tasks' | 'general'
+);
+-- Pruned to last 100 rows on each insert.
+
+CREATE TABLE IF NOT EXISTS adaptive_config (
+  section     TEXT PRIMARY KEY,  -- 'calendar' | 'email' | 'tasks'
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT NOT NULL
+);
+-- Defaults all sections to true when no rows exist (readAdaptiveConfig() handles this).
+```
 
 ---
 
@@ -196,7 +281,7 @@ For the hackathon, Notion is implemented. The interface ensures Linear and Todoi
 
 ### HTTP API (`server/src/api/server.ts`)
 
-The Express server runs on port 3000. It also serves a server-rendered HTML setup page at `/setup` for credential management.
+The Express server runs on port 3000 and serves `web/dist/` as the SPA. During development, Vite proxies `/api/*` and `/oauth2callback` to port 3000.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -206,8 +291,11 @@ The Express server runs on port 3000. It also serves a server-rendered HTML setu
 | `GET` | `/api/snapshot` | Latest `WorkStateSnapshot` \| `null` |
 | `POST` | `/api/sync` | Trigger immediate sync (fire-and-forget) |
 | `GET` | `/api/auth/google` | `{ url }` — Google OAuth initiation URL |
-| `GET` | `/oauth2callback` | Handles Google OAuth redirect, exchanges code for tokens, redirects to `/` |
-| `GET` | `/` | Redirects to `/setup` |
+| `POST` | `/api/trace` | `{ prompt }` → `TraceResult` — runs both agents in parallel |
+| `GET` | `/api/adaptive/stats` | `AdaptiveStats` — query distribution, relevance scores, suggestions |
+| `POST` | `/api/adaptive/apply` | `{ section, enabled }` — writes to `adaptive_config` table |
+| `GET` | `/oauth2callback` | Handles Google OAuth redirect, exchanges code for tokens |
+| `GET` | `/*` | Serves `web/dist/index.html` (SPA fallback) |
 
 ---
 
@@ -243,6 +331,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
   created_at  TEXT NOT NULL,
   snapshot    TEXT NOT NULL  -- full WorkStateSnapshot as JSON
 );
+-- Keep only the last 10 snapshots.
 
 CREATE TABLE IF NOT EXISTS sync_log (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -251,9 +340,21 @@ CREATE TABLE IF NOT EXISTS sync_log (
   success     INTEGER,
   error       TEXT
 );
-```
 
-Keep only the last 10 snapshots. `readLatestSnapshot()` reads `SELECT snapshot FROM snapshots ORDER BY id DESC LIMIT 1`. `readLastSyncLog()` reads the most recent sync_log row for the `/api/status` endpoint.
+CREATE TABLE IF NOT EXISTS query_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  logged_at   TEXT NOT NULL,
+  query_text  TEXT NOT NULL,
+  category    TEXT NOT NULL  -- 'calendar' | 'email' | 'tasks' | 'general'
+);
+-- Keep only the last 100 rows.
+
+CREATE TABLE IF NOT EXISTS adaptive_config (
+  section     TEXT PRIMARY KEY,  -- 'calendar' | 'email' | 'tasks'
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT NOT NULL
+);
+```
 
 ---
 
@@ -273,13 +374,11 @@ export async function ensureFreshSnapshot(maxAgeMs = 15 * 60 * 1000): Promise<Wo
 }
 ```
 
-Individual integrations can be toggled via `ENABLE_GMAIL`, `ENABLE_CALENDAR`, and `ENABLE_NOTION` environment variables (all default to `true`). The setup page allows users to select which integrations to enable.
-
 ---
 
 ### Auth Setup
 
-Google OAuth2 flow (handled by the backend + frontend together):
+Google OAuth2 flow:
 1. Frontend calls `GET /api/auth/google` to get the OAuth consent URL
 2. Frontend redirects the browser to that URL
 3. User grants access; Google redirects to `GET /oauth2callback` on the backend
@@ -295,7 +394,7 @@ Scopes: `https://www.googleapis.com/auth/gmail.readonly` and `https://www.google
 ```bash
 # .env.example
 
-# Anthropic (required for demo scripts)
+# Anthropic (required for demo scripts and /api/trace)
 ANTHROPIC_API_KEY=
 
 # Google OAuth2
@@ -320,41 +419,40 @@ PORT=3000
 
 ### package.json Layout
 
-The project uses **npm workspaces** with two packages (`harness`, `server`). The root `package.json` is the workspace root and provides orchestration scripts:
+The project uses **npm workspaces** with three packages (`harness`, `server`, `web`). The root `package.json` is the workspace root and provides orchestration scripts:
 
 ```json
 {
-  "workspaces": ["harness", "server"],
+  "workspaces": ["harness", "server", "web"],
   "scripts": {
-    "build": "npm run build -w harness && npm run build -w server",
+    "build": "npm run build -w harness && npm run build -w server && npm run build -w web",
     "start": "npm start -w server",
     "dev": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
     "demo:trace": "npm run build:harness && tsx demo/trace.ts",
     "demo:benchmark": "npm run build:harness && tsx demo/benchmark.ts",
+    "demo:adaptive": "npm run build:harness && npm run build:server && tsx demo/adaptive-benchmark.ts",
     "live:trace": "npm run build:harness && tsx live/trace.ts",
     "live:benchmark": "npm run build:harness && tsx live/benchmark.ts"
   }
 }
 ```
 
-Server dependencies (`server/package.json`) include Express, SQLite, Google APIs, Notion, and `@onecall/harness`. The `shared/` directory contains loose TypeScript files imported via relative paths by both `demo/` and `live/`.
-
 ---
 
 ## Demo Directory
 
-`demo/` contains two evaluation scripts that call the Claude API directly using `@anthropic-ai/sdk`:
+`demo/` contains evaluation scripts that call the Claude API directly using `@anthropic-ai/sdk`:
 
 ```
 demo/
-├── data/mock.ts       # Static WorkStateSnapshot + raw provider slices (realistic UCLA research context)
+├── data/mock.ts              # Static WorkStateSnapshot + raw provider slices
 ├── agents/
-│   ├── without.ts     # Multi-turn agent with 4 raw tools: gmail_search_threads, gmail_get_thread,
-│   │                  #   calendar_list_events, notion_query_database
-│   └── with.ts        # Single-turn agent using OneCallAnthropic — 0 tools, context pre-injected
-├── prompts.ts         # 20 representative productivity prompts
-├── trace.ts           # Single-prompt color-coded side-by-side trace
-└── benchmark.ts       # Sequential 20-prompt run → metrics table + summary
+│   ├── without.ts            # Multi-turn agent with 4 raw tools (mock responses)
+│   └── with.ts               # Single-turn agent using OneCallAnthropic (mock snapshot)
+├── adaptive-benchmark.ts     # Two-phase adaptive demo (see below)
+├── trace.ts                  # Single-prompt color-coded side-by-side trace
+└── benchmark.ts              # Sequential 20-prompt run → metrics table + summary
 ```
 
 **Running the demo:**
@@ -362,49 +460,49 @@ demo/
 npm run demo:trace              # default prompt, real-time color trace
 npm run demo:trace -- p04       # specific prompt by ID
 npm run demo:benchmark          # all 20 prompts, sequential to avoid rate limits
+npm run demo:adaptive           # adaptive optimization two-phase demo
 ```
 
-**Current evaluation status:** Both scripts use mocked data from `demo/data/mock.ts`. The "without" agent's tool handlers return static mock responses; the "with" agent's `snapshotGetter` returns `MOCK_SNAPSHOT`. The evaluation measures tool call count, LLM turn count, latency, and token usage — not end-to-end correctness against live data.
+### Adaptive benchmark (`demo/adaptive-benchmark.ts`)
 
-**Observed results (single prompt):**
-- Tool calls: 5 → 0 (100% fewer)
-- LLM turns: 3 → 1 (67% fewer)
-- Latency: ~67% faster
-- Tokens: ~88% fewer
+Self-contained two-phase demo — no server or SQLite needed, runs entirely in memory with mock data:
 
-**Token note:** The "with" agent delivers all context in the system prompt up front. This results in dramatically fewer tokens than the "without" agent, which makes multiple round-trips accumulating context. Token reduction is a strong positive metric for this approach.
+1. Runs 15 prompts (calendar/task-heavy, 1 email query) with all sections enabled. Classifies each query in memory.
+2. Computes section relevance from specific-category queries only. Email scores ~8% → below 15% threshold → suggestion fires.
+3. Runs same 15 prompts with email section disabled. Token count drops.
+4. Prints side-by-side table and final reduction %.
 
 ---
 
 ## Demo Script (for judges)
 
-**Without OneCall:**
-- Ask Claude: *"What should I focus on right now?"*
-- Show tool call trace: 5+ calls across Gmail, Calendar, Notion; 3+ LLM turns
-- Record total latency
+**Story 1 — Zero tool calls:**
+- Without OneCall: ask Claude *"What should I focus on right now?"* → show 5 tool calls, 3 LLM turns, ~20s
+- With OneCall: same question → 0 tool calls, 1 LLM turn, ~6s, context already in system prompt
+- Punchline: "We didn't give Claude a better tool. We changed what Claude knows before it starts thinking."
 
-**With OneCall:**
-- Same question, using `OneCallAnthropic`
-- Show: no tool calls, 1 LLM turn, work context already in system prompt
-- Record total latency
-
-**The punchline:** "We didn't give Claude a better tool. We changed what Claude knows before it starts thinking."
+**Story 2 — Adaptive optimization:**
+- Run `demo:adaptive` → Phase 1 shows all-sections baseline tokens
+- Analysis panel: "email section only relevant for 8% of queries"
+- Phase 2 shows ~20% fewer tokens
+- Punchline: "The system learned your workflow. Same answers, leaner prompt."
 
 ---
 
 ## What NOT to Build
 
 - Do not implement write operations (creating tasks, sending emails) — read-only scope keeps auth simple and demo safe
-- Do not try to support every task manager — Notion is sufficient for the demo; the `TaskProvider` interface signals extensibility
+- Do not try to support every task manager — Notion is sufficient; the `TaskProvider` interface signals extensibility
 - Do not implement semantic search or vector embeddings — the snapshot is intentionally structured, not a RAG system
 - Do not add a tool-call flow back to the "with" agent — the entire point is zero tool calls
+- Do not add autonomous config mutation — the adaptive system is always suggest + confirm
 - Do not add tool-based context retrieval — state delivery is through harness injection only
 
 ---
 
 ## Coding
 
-It is critical that your changes will not pile up overtime and make the codebase "slop" and completely unreadable and unmanageable. So before you make any changes, first take a step back and think. Is your current approach the cleanest, minimally invasive way to implement the change? Does it elegantly fit into the existing code structure and style? If not, can you refactor the codebase to accommodate your change in a clean way, but first tell me about your proposed refactor and get my approval before you start refactoring.
+It is critical that your changes will not pile up over time and make the codebase "slop" and completely unreadable and unmanageable. So before you make any changes, first take a step back and think. Is your current approach the cleanest, minimally invasive way to implement the change? Does it elegantly fit into the existing code structure and style? If not, can you refactor the codebase to accommodate your change in a clean way, but first tell me about your proposed refactor and get my approval before you start refactoring.
 
 When writing code, ensure to follow existing code style and conventions used in the codebase. This includes:
 - Using clear and descriptive variable and function names
