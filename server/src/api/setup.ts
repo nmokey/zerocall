@@ -1,6 +1,7 @@
 import { getConfigStatus, writeConfig } from './config.js';
 import { isAuthenticated, getOAuthUrl } from '../auth/google.js';
 import { readLastSyncLog } from '../db/snapshot.js';
+import { computeAdaptiveStats } from '../analytics/suggestions.js';
 
 /** Escapes HTML special characters to prevent XSS in template strings. */
 function esc(str: string): string {
@@ -45,6 +46,92 @@ function validatePartial(values: Record<string, string>): string[] {
     errors.push('NOTION_DATABASE_ID should be a 32-character hex string');
   }
   return errors;
+}
+
+/** Renders a horizontal bar representing a percentage (0–100), max 120px wide. */
+function barHtml(pct: number, color = '#4f46e5'): string {
+  const width = Math.round(pct * 1.2); // 100% → 120px
+  return `<span class="bar" style="width:${width}px;background:${esc(color)}"></span>`;
+}
+
+/** Renders the Adaptive Optimization card. Returns empty string if < 5 queries logged. */
+function renderAdaptiveCard(): string {
+  const stats = computeAdaptiveStats();
+  if (stats.queryCount < 5) {
+    return `<div class="card">
+      <div class="card-header">
+        <span class="section-label">Adaptive Optimization</span>
+      </div>
+      <p style="font-size:0.85rem;color:#888">Ask at least 5 questions through OneCall to unlock personalized context suggestions. (${stats.queryCount}/5 so far)</p>
+    </div>`;
+  }
+
+  const total = stats.queryCount;
+  const dist = stats.categoryDistribution;
+  const categoryColors: Record<string, string> = {
+    calendar: '#3b82f6',
+    email: '#10b981',
+    tasks: '#f59e0b',
+    general: '#8b5cf6',
+  };
+
+  const distBars = ['calendar', 'email', 'tasks', 'general']
+    .map(cat => {
+      const count = dist[cat] ?? 0;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      if (count === 0) return '';
+      return `<span class="cat">${barHtml(pct, categoryColors[cat])}<span>${esc(cat[0].toUpperCase() + cat.slice(1))} ${pct}%</span></span>`;
+    })
+    .filter(Boolean)
+    .join('');
+
+  const suggestionsHtml = stats.suggestions.map(s => {
+    const pct = Math.round(s.relevanceScore * 100);
+    return `<div class="suggestion">
+      <div>
+        <p>Disable <strong>${esc(s.section)}</strong> section — only relevant for ${pct}% of your queries</p>
+        <p class="savings">Projected savings: ~${s.projectedTokenSavings} tokens/query</p>
+      </div>
+      <button class="btn-apply" onclick="applyAdaptive('${esc(s.section)}', false)">Apply</button>
+    </div>`;
+  }).join('');
+
+  const configRows = (['calendar', 'email', 'tasks'] as const).map(s => {
+    const on = stats.currentConfig[s];
+    return `<span class="${on ? 'section-on' : 'section-off'}">${esc(s[0].toUpperCase() + s.slice(1))}: ${on ? 'on' : 'off'}</span>`;
+  }).join(' &nbsp;·&nbsp; ');
+
+  return `<div class="card">
+    <div class="card-header">
+      <span class="section-label">Adaptive Optimization</span>
+      <span class="badge badge-ok" style="font-size:0.72rem">${total} queries analyzed</span>
+    </div>
+    <p style="font-size:0.82rem;color:#555;margin-bottom:4px">Query distribution (last 100):</p>
+    <div class="dist-bar">${distBars}</div>
+    <p style="font-size:0.8rem;color:#888;margin-top:8px">Active sections: ${configRows}</p>
+    ${suggestionsHtml || '<p style="font-size:0.84rem;color:#166534;margin-top:12px">✓ All sections are relevant to your query patterns.</p>'}
+    <p class="re-enable-row">Reset all sections: <a onclick="resetAdaptive()">Re-enable all</a></p>
+  </div>
+  <script>
+    async function applyAdaptive(section, enabled) {
+      await fetch('/api/adaptive/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section, enabled }),
+      });
+      location.reload();
+    }
+    async function resetAdaptive() {
+      await Promise.all(['calendar','email','tasks'].map(s =>
+        fetch('/api/adaptive/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ section: s, enabled: true }),
+        })
+      ));
+      location.reload();
+    }
+  </script>`;
 }
 
 /** Renders the full setup/status HTML page. */
@@ -113,6 +200,18 @@ export function renderSetupPage(errors: string[] = [], saved: string | null = nu
     .msg-box p { margin: 2px 0; }
     .error-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; }
     .success-box { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+    .dist-bar { display: flex; gap: 6px; align-items: center; margin: 10px 0 6px; font-size: 0.78rem; color: #555; flex-wrap: wrap; }
+    .dist-bar .cat { display: flex; align-items: center; gap: 4px; }
+    .dist-bar .bar { display: inline-block; height: 8px; border-radius: 4px; background: #4f46e5; }
+    .suggestion { display: flex; align-items: center; justify-content: space-between; background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-top: 12px; gap: 12px; }
+    .suggestion p { font-size: 0.84rem; color: #78350f; margin: 0; }
+    .suggestion .savings { font-size: 0.72rem; color: #92400e; margin-top: 2px; }
+    .btn-apply { background: #4f46e5; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 0.82rem; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .btn-apply:hover { background: #4338ca; }
+    .section-on { color: #166534; font-weight: 600; }
+    .section-off { color: #92400e; font-weight: 600; }
+    .re-enable-row { margin-top: 10px; font-size: 0.8rem; color: #888; }
+    .re-enable-row a { color: #4f46e5; text-decoration: none; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -195,6 +294,8 @@ export function renderSetupPage(errors: string[] = [], saved: string | null = nu
         <button type="submit" class="btn btn-primary">Save Settings</button>
       </form>
     </div>
+
+    ${renderAdaptiveCard()}
   </div>
 </body>
 </html>`;

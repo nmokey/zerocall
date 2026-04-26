@@ -5,6 +5,8 @@ import { syncAll } from '../sync/syncAll.js';
 import { exchangeCodeForTokens, isAuthenticated, getOAuthUrl } from '../auth/google.js';
 import { getConfigStatus, validateConfig, writeConfig, getIntegrationPreferences, IntegrationPreferences } from './config.js';
 import { renderSetupPage, handleSetupPost } from './setup.js';
+import { computeAdaptiveStats } from '../analytics/suggestions.js';
+import { setAdaptiveSection } from '../db/adaptiveConfig.js';
 
 export function createApiServer(): express.Express {
   const app = express();
@@ -87,6 +89,25 @@ export function createApiServer(): express.Express {
     } catch (err: any) {
       res.status(500).send(`OAuth failed: ${err.message}`);
     }
+  });
+
+  app.get('/api/adaptive/stats', (_req, res) => {
+    res.json(computeAdaptiveStats());
+  });
+
+  app.post('/api/adaptive/apply', (req, res) => {
+    const { section, enabled } = req.body as { section?: string; enabled?: boolean };
+    const validSections = ['calendar', 'email', 'tasks'];
+    if (!section || !validSections.includes(section)) {
+      res.status(400).json({ error: 'section must be one of: calendar, email, tasks' });
+      return;
+    }
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+    setAdaptiveSection(section as 'calendar' | 'email' | 'tasks', enabled);
+    res.json({ ok: true, section, enabled });
   });
 
   app.get('/', (_req, res) => {

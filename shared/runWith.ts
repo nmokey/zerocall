@@ -1,24 +1,34 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { OneCallAnthropic } from '@onecall/harness';
-import type { WorkStateSnapshot } from '@onecall/harness';
+import type { WorkStateSnapshot, SectionConfig } from '@onecall/harness';
 import type { AgentRun } from './types.js';
+
+interface RunWithOneCallOptions {
+  queryLogger?: (queryText: string) => void;
+  configGetter?: () => SectionConfig | null;
+}
 
 /**
  * Creates a runWithOneCall function bound to a specific snapshotGetter.
  *
  * Demo passes `() => MOCK_SNAPSHOT`; live passes a function that reads from
- * SQLite via readLatestSnapshot().
+ * SQLite via ensureFreshSnapshot(). Optional queryLogger and configGetter
+ * enable adaptive prompt management in live environments.
  *
  * @param snapshotGetter - Returns the current WorkStateSnapshot (or null).
+ * @param options - Optional queryLogger and configGetter for adaptive features.
  * @returns An agent function with signature (client, prompt) => Promise<AgentRun>.
  */
 export function createRunWithOneCall(
   snapshotGetter: () => WorkStateSnapshot | null | Promise<WorkStateSnapshot | null>,
+  options: RunWithOneCallOptions = {},
 ): (_client: Anthropic, prompt: string) => Promise<AgentRun> {
   return async (_client: Anthropic, prompt: string): Promise<AgentRun> => {
     const client = new OneCallAnthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
       snapshotGetter,
+      queryLogger: options.queryLogger,
+      configGetter: options.configGetter,
     });
 
     const startTime = Date.now();
