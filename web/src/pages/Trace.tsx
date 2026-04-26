@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { AgentRun, AdaptiveStats, FetchProfile, TraceResult, ToolCallRecord, WorkStateSnapshot } from '../api';
-import { getStatus, getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
+import { getSnapshot, getAdaptiveStats, applyAdaptiveSection } from '../api';
 import type { Theme } from '../theme';
 
 // ─── Animations ───────────────────────────────────────────────────────────────
@@ -425,27 +425,8 @@ export default function Trace({ T }: { T: Theme }) {
   const [loading, setLoading] = useState(false);
   const [stream, setStream] = useState<StreamState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [lastSyncSuccess, setLastSyncSuccess] = useState<boolean | null>(null);
   const [adaptiveStats, setAdaptiveStats] = useState<AdaptiveStats | null>(null);
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS);
-  const lastSyncRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    async function check() {
-      try {
-        const s = await getStatus();
-        if (s.lastSync && s.lastSync !== lastSyncRef.current) {
-          lastSyncRef.current = s.lastSync;
-          setLastSync(s.lastSync);
-          setLastSyncSuccess(s.lastSyncSuccess);
-        }
-      } catch { /* ignore polling errors silently */ }
-    }
-    check();
-    const id = setInterval(check, 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   // Fetch adaptive stats on mount and after each trace completes.
   const refreshAdaptiveStats = useCallback(async () => {
@@ -537,39 +518,16 @@ export default function Trace({ T }: { T: Theme }) {
 
   const bothDone = !!(stream?.without && stream?.with);
 
-  const syncLabel = lastSync ? (() => {
-    const now = new Date();
-    const syncTime = new Date(lastSync);
-    const diffMs = now.getTime() - syncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'last sync · just now · ';
-    if (diffMins < 60) return `last sync · ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago · `;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `last sync · ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago · `;
-    const diffDays = Math.floor(diffHours / 24);
-    return `last sync · ${diffDays} day${diffDays !== 1 ? 's' : ''} ago · `;
-  })() : null;
-
   return (
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
       <style>{KEYFRAMES}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Live Trace</h1>
-          <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>
-            Run both agents against your live data and see the side-by-side comparison.
-          </p>
-        </div>
-        {syncLabel && (
-          <span style={{ fontSize: '0.78rem', color: T.dimmer }}>
-            {syncLabel}
-            <span style={{ color: lastSyncSuccess ? T.success : T.error, fontWeight: 500 }}>
-              {lastSyncSuccess ? '✓ success' : '✗ failed'}
-            </span>
-          </span>
-        )}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Live Trace</h1>
+        <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>
+          Run both agents against your live data and see the side-by-side comparison.
+        </p>
       </div>
 
       {/* Prompt input */}

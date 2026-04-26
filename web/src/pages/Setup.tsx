@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getConfig, getGoogleAuthUrl, getStatus, postConfig, triggerSync, type ApiConfig, type ApiStatus } from '../api';
+import { getConfig, getGoogleAuthUrl, getStatus, postConfig, type ApiConfig, type ApiStatus } from '../api';
 import type { Theme } from '../theme';
 
 interface Props {
@@ -99,7 +99,6 @@ export default function Setup({ onDone, T }: Props) {
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -155,27 +154,6 @@ export default function Setup({ onDone, T }: Props) {
     }
   }
 
-  async function handleSync() {
-    const previousLastSync = status?.lastSync;
-    setSyncing(true);
-    await triggerSync().catch(() => null);
-
-    // Poll until lastSync timestamp changes, then update status
-    const pollInterval = setInterval(async () => {
-      try {
-        const newStatus = await getStatus();
-        if (newStatus.lastSync !== null && newStatus.lastSync !== previousLastSync) {
-          clearInterval(pollInterval);
-          setStatus(newStatus);
-          setSyncing(false);
-        }
-      } catch {
-        clearInterval(pollInterval);
-        setSyncing(false);
-      }
-    }, 1000);
-  }
-
   async function handleGoogleAuth() {
     try {
       const { url } = await getGoogleAuthUrl();
@@ -194,20 +172,6 @@ export default function Setup({ onDone, T }: Props) {
   const connectedCount = [googleCredOk && googleAuthed, notionOk, slackOk, anthropicOk].filter(Boolean).length;
   const allFields = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NOTION_TOKEN', 'NOTION_DATABASE_ID', 'SLACK_USER_TOKEN', 'ANTHROPIC_API_KEY'];
   const pendingCount = allFields.filter(k => !present.includes(k)).length;
-
-  const lastSync = status?.lastSync;
-  const syncLabel = lastSync ? (() => {
-    const now = new Date();
-    const syncTime = new Date(lastSync);
-    const diffMs = now.getTime() - syncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'last sync · just now · ';
-    if (diffMins < 60) return `last sync · ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago · `;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `last sync · ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago · `;
-    const diffDays = Math.floor(diffHours / 24);
-    return `last sync · ${diffDays} day${diffDays !== 1 ? 's' : ''} ago · `;
-  })() : 'No sync yet';
 
   const tableHead: React.CSSProperties = {
     display: 'grid',
@@ -236,29 +200,9 @@ export default function Setup({ onDone, T }: Props) {
     <div style={{ padding: '48px 24px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Setup</h1>
-          <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>Configure integrations and check connection status.</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingTop: 4 }}>
-          {lastSync && (
-            <span style={{ fontSize: '0.78rem', color: T.dimmer }}>
-              {syncLabel}
-              <span style={{ color: status?.lastSyncSuccess ? T.success : T.error, fontWeight: 500 }}>
-                {status?.lastSyncSuccess ? '✓ success' : '✗ failed'}
-              </span>
-            </span>
-          )}
-          {!lastSync && !syncing && <span style={{ fontSize: '0.78rem', color: T.dimmer }}>No sync yet</span>}
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            style={{ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 500, fontFamily: 'inherit', border: `1px solid ${T.border}`, borderRadius: 6, background: syncing ? T.inputBg : T.primary, color: syncing ? T.text : 'white', cursor: syncing ? 'default' : 'pointer', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-          >
-            {syncing ? 'Syncing...' : 'Sync'}
-          </button>
-        </div>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>Setup</h1>
+        <p style={{ color: T.muted, fontSize: '0.875rem', marginTop: 5 }}>Configure integrations and check connection status.</p>
       </div>
 
       {/* Banner */}

@@ -1,11 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { getStatus } from './api';
+import React, { useEffect, useRef, useState } from 'react';
+import { getStatus, triggerSync } from './api';
 import Setup from './pages/Setup';
 import Trace from './pages/Trace';
 import { DARK, LIGHT, type Theme } from './theme';
 
 type Page = 'setup' | 'trace';
 type AppState = 'loading' | 'setup' | 'ready';
+
+function formatSyncAge(lastSync: string): string {
+  const diffMs = Date.now() - new Date(lastSync).getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'last sync · just now';
+  if (diffMins < 60) return `last sync · ${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `last sync · ${diffHours}h ago`;
+  return `last sync · ${Math.floor(diffHours / 24)}d ago`;
+}
 
 function Tab({ label, active, disabled, onClick, T }: { label: string; active: boolean; disabled?: boolean; onClick: () => void; T: Theme }) {
   return (
@@ -75,6 +85,10 @@ export default function App() {
     try { return localStorage.getItem('zc-theme') === 'dark'; }
     catch { return false; }
   });
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [lastSyncSuccess, setLastSyncSuccess] = useState<boolean | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const lastSyncRef = useRef<string | null>(null);
 
   const T = dark ? DARK : LIGHT;
 
@@ -84,17 +98,49 @@ export default function App() {
   }, [dark]);
 
   useEffect(() => {
-    getStatus()
-      .then(s => {
-        if (s.configured && s.authenticated) {
-          setAppState('ready');
-          setPage('trace');
-        } else {
-          setAppState('setup');
+    async function checkStatus() {
+      try {
+        const s = await getStatus();
+        if (s.lastSync && s.lastSync !== lastSyncRef.current) {
+          lastSyncRef.current = s.lastSync;
+          setLastSync(s.lastSync);
+          setLastSyncSuccess(s.lastSyncSuccess);
         }
-      })
-      .catch(() => setAppState('setup'));
+        return s;
+      } catch { return null; }
+    }
+
+    checkStatus().then(s => {
+      if (!s) { setAppState('setup'); return; }
+      if (s.configured && s.authenticated) {
+        setAppState('ready');
+        setPage('trace');
+      } else {
+        setAppState('setup');
+      }
+    });
+
+    const id = setInterval(checkStatus, 30_000);
+    return () => clearInterval(id);
   }, []);
+
+  async function handleSync() {
+    const previousLastSync = lastSync;
+    setSyncing(true);
+    await triggerSync().catch(() => null);
+    const poll = setInterval(async () => {
+      try {
+        const s = await getStatus();
+        if (s.lastSync !== null && s.lastSync !== previousLastSync) {
+          clearInterval(poll);
+          lastSyncRef.current = s.lastSync;
+          setLastSync(s.lastSync);
+          setLastSyncSuccess(s.lastSyncSuccess);
+          setSyncing(false);
+        }
+      } catch { clearInterval(poll); setSyncing(false); }
+    }, 1000);
+  }
 
   if (appState === 'loading') {
     return (
@@ -125,22 +171,54 @@ export default function App() {
         <div style={{
           display: 'flex',
           alignItems: 'flex-end',
-          padding: '20px 28px 0',
+          padding: '12px 28px 0',
           gap: 8,
         }}>
           <Tab label="Setup" active={page === 'setup'} onClick={() => setPage('setup')} T={T} />
           <Tab label="DEMO" active={page === 'trace'} disabled={!isReady} onClick={() => isReady && setPage('trace')} T={T} />
           <span style={{ flex: 1 }} />
-          <span style={{
-            fontWeight: 700,
-            fontSize: '1.4rem',
-            letterSpacing: '-0.03em',
-            color: T.navText,
-            paddingBottom: 10,
-            userSelect: 'none',
-          }}>
-            ZeroCall
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 10 }}>
+            {/* Sync info */}
+            {lastSync ? (
+              <span style={{ fontSize: '0.75rem', color: T.dimmer }}>
+                {formatSyncAge(lastSync)} ·{' '}
+                <span style={{ color: lastSyncSuccess ? T.success : T.error, fontWeight: 500 }}>
+                  {lastSyncSuccess ? '✓ success' : '✗ failed'}
+                </span>
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.75rem', color: T.dimmer }}>No sync yet</span>
+            )}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              style={{
+                padding: '4px 14px',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                fontFamily: 'inherit',
+                border: `1px solid ${T.border}`,
+                borderRadius: 6,
+                background: syncing ? T.inputBg : T.primary,
+                color: syncing ? T.text : 'white',
+                cursor: syncing ? 'default' : 'pointer',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {syncing ? 'Syncing…' : 'Sync'}
+            </button>
+            <span style={{
+              fontWeight: 700,
+              fontSize: '1.4rem',
+              letterSpacing: '-0.03em',
+              color: T.navText,
+              userSelect: 'none',
+            }}>
+              ZeroCall
+            </span>
+          </div>
         </div>
       </header>
 
