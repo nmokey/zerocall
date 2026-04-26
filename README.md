@@ -23,7 +23,7 @@ Work state doesn't change that fast, but agents act like it does.
 ZeroCall is an **agent harness** that intercepts every outgoing LLM request and injects a pre-synced `WorkStateSnapshot` directly into the system prompt — before Claude's first token. No tool calls. No model-driven retrieval. The context is already there.
 
 **Before ZeroCall:** 5+ tool calls, 3+ LLM turns, ~20 seconds per productivity query  
-**After ZeroCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and 88% fewer tokens
+**After ZeroCall:** 0 tool calls, 1 LLM turn, ~6 seconds — and ~89% fewer tokens
 
 The key insight: we didn't give Claude a better tool. We changed what Claude knows before it starts thinking.
 
@@ -63,7 +63,7 @@ Classification is purely lexical — no extra LLM call. The suggestion engine co
 
 ### Layer 4: React dashboard + live trace
 
-The server serves a Vite + React frontend. It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts a **live trace runner**: type any productivity prompt and watch both agents run in parallel — the ZeroCall agent's response pops in immediately while the raw-tool agent's tool calls stream in one by one in real time.
+The server serves a Vite + React frontend with light/dark mode (toggle in the bottom-left corner). It handles first-run credential setup (Google OAuth, Notion token), shows the current snapshot and sync status, and hosts a **live trace runner**: type any productivity prompt and watch both agents run in parallel — the ZeroCall agent's response pops in immediately while the raw-tool agent's tool calls stream in one by one in real time. Results are displayed as a side-by-side comparison with raw metric counts (tool calls, LLM turns saved) and percentage reductions for latency and tokens.
 
 ---
 
@@ -90,7 +90,7 @@ Open `http://localhost:3000` in your browser. Enter credentials in the Setup pag
 |---|---|
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth client ID (Web application). Set redirect URI to `http://localhost:3000/oauth2callback`. Enable Gmail API and Google Calendar API. Add your email as a test user under OAuth consent screen → Test users. |
 | `NOTION_TOKEN` | [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → New integration → Internal Integration Secret. Share your task database with the integration via the database's Connections menu. |
-| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`) |
+| `NOTION_DATABASE_ID` | 32-char hex ID from your Notion task database URL (between the last `/` and `?`). The Notion SDK's `client.request()` is broken in v5 — ZeroCall uses `fetch` directly against the REST API instead. |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 
 ### 4. Connect Google
@@ -118,7 +118,7 @@ Run both simultaneously and open `http://localhost:5173`.
 
 - **Gmail** — classifies threads into `action_required` (inbound + unread) and `awaiting_reply` (outbound, sent >4h ago, no reply). Fetches threads modified in the last 48 hours.
 - **Google Calendar** — today's events, free blocks ≥30 min within working hours (default 9am–6pm, configurable), upcoming deadlines in the next 7 days.
-- **Notion** — queries your task database, bins tasks into overdue / due today / in progress by due date and status.
+- **Notion** — queries your task database via direct REST API (`fetch`), bins tasks into overdue / due today / in progress by due date and status.
 
 The `TaskProvider` interface makes Linear and Todoist drop-in additions.
 
