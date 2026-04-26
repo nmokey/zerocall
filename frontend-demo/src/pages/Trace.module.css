@@ -196,7 +196,7 @@
 
 .barGraphGrid {
   display: grid;
-  gap: 16px;
+  gap: 32px;
 }
 
 .barMetricGroup {
@@ -214,15 +214,16 @@
 
 .barPair {
   display: flex;
-  gap: 8px;
+  gap: 14px;
   align-items: flex-end;
+  justify-content: center;
 }
 
 .barColumn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
+  width: 28px;
   gap: 6px;
 }
 
@@ -248,10 +249,19 @@
   transition: height 0.4s ease;
 }
 
+.barSublabelWrap {
+  position: relative;
+  width: 100%;
+  height: 1em;
+}
+
 .barSublabel {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 0.7rem;
   color: var(--zc-muted);
-  text-align: center;
+  white-space: nowrap;
 }
 
 /* Agent panel */
